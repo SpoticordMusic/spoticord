@@ -1,0 +1,9 @@
+# Rust
+/target
+
+# SQLite database
+*.db
+*.sqlite
+
+# Secrets
+.env
