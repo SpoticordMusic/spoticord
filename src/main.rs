@@ -4,9 +4,13 @@ use dotenv::dotenv;
 use log::*;
 use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
 use songbird::SerenityInit;
-use std::env;
+use std::{env, process::exit};
+use tokio::signal::unix::SignalKind;
 
-use crate::{bot::commands::CommandManager, database::Database, session::manager::SessionManager};
+use crate::{
+  bot::commands::CommandManager, database::Database, session::manager::SessionManager,
+  stats::StatsManager,
+};
 
 mod audio;
 mod bot;
@@ -15,10 +19,23 @@ mod ipc;
 mod librespot_ext;
 mod player;
 mod session;
+mod stats;
 mod utils;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
+  if std::env::var("RUST_LOG").is_err() {
+    #[cfg(debug_assertions)]
+    {
+      std::env::set_var("RUST_LOG", "spoticord");
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+      std::env::set_var("RUST_LOG", "spoticord=info");
+    }
+  }
+
   env_logger::init();
 
   let args: Vec<String> = env::args().collect();
@@ -30,6 +47,8 @@ async fn main() {
       debug!("Starting Spoticord player");
 
       player::main().await;
+
+      debug!("Player exited, shutting down");
 
       return;
     }
@@ -48,6 +67,10 @@ async fn main() {
 
   let token = env::var("TOKEN").expect("a token in the environment");
   let db_url = env::var("DATABASE_URL").expect("a database URL in the environment");
+  let kv_url = env::var("KV_URL").expect("a redis URL in the environment");
+
+  let stats_manager = StatsManager::new(kv_url).expect("Failed to connect to redis");
+  let session_manager = SessionManager::new();
 
   // Create client
   let mut client = Client::builder(
@@ -65,23 +88,56 @@ async fn main() {
 
     data.insert::<Database>(Database::new(db_url, None));
     data.insert::<CommandManager>(CommandManager::new());
-    data.insert::<SessionManager>(SessionManager::new());
+    data.insert::<SessionManager>(session_manager.clone());
   }
 
   let shard_manager = client.shard_manager.clone();
+  let cache = client.cache_and_http.cache.clone();
 
-  // Spawn a task to shutdown the bot when a SIGINT is received
+  let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
+
+  // Background tasks
   tokio::spawn(async move {
-    tokio::signal::ctrl_c()
-      .await
-      .expect("Could not register CTRL+C handler");
+    loop {
+      tokio::select! {
+        _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+          let guild_count = cache.guilds().len();
+          let active_count = session_manager.get_active_session_count().await;
 
-    info!("SIGINT Received, shutting down...");
+          if let Err(why) = stats_manager.set_server_count(guild_count) {
+            error!("Failed to update server count: {}", why);
+          }
 
-    shard_manager.lock().await.shutdown_all().await;
+          if let Err(why) = stats_manager.set_active_count(active_count) {
+            error!("Failed to update active count: {}", why);
+          }
+
+          // Yes, I like to handle my s's when I'm working with amounts
+          debug!("Updated stats: {} guild{}, {} active session{}", guild_count, if guild_count == 1 { "" } else { "s" }, active_count, if active_count == 1 { "" } else { "s" });
+        }
+
+        _ = tokio::signal::ctrl_c() => {
+          info!("Received interrupt signal, shutting down...");
+
+          shard_manager.lock().await.shutdown_all().await;
+
+          break;
+        }
+
+        _ = sigterm.recv() => {
+          info!("Received terminate signal, shutting down...");
+
+          shard_manager.lock().await.shutdown_all().await;
+
+          break;
+        }
+      }
+    }
   });
 
+  // Start the bot
   if let Err(why) = client.start_autosharded().await {
-    println!("Error in bot: {:?}", why);
+    error!("FATAL Error in bot: {:?}", why);
+    exit(1);
   }
 }

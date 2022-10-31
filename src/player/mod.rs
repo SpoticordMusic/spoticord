@@ -8,10 +8,10 @@ use librespot::{
   playback::{
     config::{Bitrate, PlayerConfig},
     mixer::{self, MixerConfig},
-    player::Player,
+    player::{Player, PlayerEvent},
   },
 };
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, warn};
 use serde_json::json;
 
 use crate::{
@@ -24,6 +24,7 @@ use crate::{
 pub struct SpoticordPlayer {
   client: ipc::Client,
   session: Option<Session>,
+  spirc: Option<Spirc>,
 }
 
 impl SpoticordPlayer {
@@ -31,6 +32,7 @@ impl SpoticordPlayer {
     Self {
       client,
       session: None,
+      spirc: None,
     }
   }
 
@@ -49,6 +51,11 @@ impl SpoticordPlayer {
     // Log in using the token
     let credentials = Credentials::with_token(username, &token);
 
+    // Shutdown old session (cannot be done in the stop function)
+    if let Some(session) = self.session.take() {
+      session.shutdown();
+    }
+
     // Connect the session
     let (session, _) = match Session::connect(session_config, credentials, None, false).await {
       Ok((session, credentials)) => (session, credentials),
@@ -64,19 +71,18 @@ impl SpoticordPlayer {
     let client = self.client.clone();
 
     // Create the player
-    let (player, _) = Player::new(
+    let (player, mut receiver) = Player::new(
       player_config,
       session.clone(),
       mixer.get_soft_volume(),
       move || Box::new(StdoutSink::new(client)),
     );
 
-    let mut receiver = player.get_player_event_channel();
-
-    let (_, spirc_run) = Spirc::new(
+    let (spirc, spirc_task) = Spirc::new(
       ConnectConfig {
         name: device_name.into(),
-        initial_volume: Some(65535),
+        // 75%
+        initial_volume: Some((65535 / 4) * 3),
         ..ConnectConfig::default()
       },
       session.clone(),
@@ -85,6 +91,7 @@ impl SpoticordPlayer {
     );
 
     let device_id = session.device_id().to_owned();
+    let ipc = self.client.clone();
 
     // IPC Handler
     tokio::spawn(async move {
@@ -103,12 +110,12 @@ impl SpoticordPlayer {
         {
           Ok(resp) => {
             if resp.status() == 202 {
-              info!("Successfully switched to device");
+              debug!("Successfully switched to device");
               break;
             }
           }
           Err(why) => {
-            debug!("Failed to set device: {}", why);
+            error!("Failed to set device: {}", why);
             break;
           }
         }
@@ -116,25 +123,76 @@ impl SpoticordPlayer {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
       }
 
-      // TODO: Do IPC stuff with these events
+      // Do IPC stuff with these events
       loop {
         let event = match receiver.recv().await {
           Some(event) => event,
           None => break,
         };
 
-        trace!("Player event: {:?}", event);
+        match event {
+          PlayerEvent::Playing {
+            play_request_id: _,
+            track_id,
+            position_ms,
+            duration_ms,
+          } => {
+            if let Err(why) = ipc.send(IpcPacket::Playing(
+              track_id.to_uri().unwrap(),
+              position_ms,
+              duration_ms,
+            )) {
+              error!("Failed to send playing packet: {}", why);
+            }
+          }
+
+          PlayerEvent::Paused {
+            play_request_id: _,
+            track_id,
+            position_ms,
+            duration_ms,
+          } => {
+            if let Err(why) = ipc.send(IpcPacket::Paused(
+              track_id.to_uri().unwrap(),
+              position_ms,
+              duration_ms,
+            )) {
+              error!("Failed to send paused packet: {}", why);
+            }
+          }
+
+          PlayerEvent::Changed {
+            old_track_id: _,
+            new_track_id,
+          } => {
+            if let Err(why) = ipc.send(IpcPacket::TrackChange(new_track_id.to_uri().unwrap())) {
+              error!("Failed to send track change packet: {}", why);
+            }
+          }
+
+          PlayerEvent::Stopped {
+            play_request_id: _,
+            track_id: _,
+          } => {
+            if let Err(why) = ipc.send(IpcPacket::Stopped) {
+              error!("Failed to send player stopped packet: {}", why);
+            }
+          }
+
+          _ => {}
+        };
       }
 
-      info!("Player stopped");
+      debug!("Player stopped");
     });
 
-    tokio::spawn(spirc_run);
+    self.spirc = Some(spirc);
+    session.spawn(spirc_task);
   }
 
   pub fn stop(&mut self) {
-    if let Some(session) = self.session.take() {
-      session.shutdown();
+    if let Some(spirc) = self.spirc.take() {
+      spirc.shutdown();
     }
   }
 }
@@ -162,13 +220,13 @@ pub async fn main() {
 
     match message {
       IpcPacket::Connect(token, device_name) => {
-        info!("Connecting to Spotify with device name {}", device_name);
+        debug!("Connecting to Spotify with device name {}", device_name);
 
         player.start(token, device_name).await;
       }
 
       IpcPacket::Disconnect => {
-        info!("Disconnecting from Spotify");
+        debug!("Disconnecting from Spotify");
 
         player.stop();
       }
@@ -185,6 +243,4 @@ pub async fn main() {
       }
     }
   }
-
-  info!("We're done here, shutting down...");
 }

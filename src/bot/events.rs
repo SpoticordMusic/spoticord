@@ -3,9 +3,11 @@
 use log::*;
 use serenity::{
   async_trait,
-  model::prelude::{interaction::Interaction, Ready},
+  model::prelude::{interaction::Interaction, Activity, Ready},
   prelude::{Context, EventHandler},
 };
+
+use crate::utils::consts::MOTD;
 
 use super::commands::CommandManager;
 
@@ -23,6 +25,8 @@ impl EventHandler for Handler {
 
     command_manager.register_commands(&ctx).await;
 
+    ctx.set_activity(Activity::listening(MOTD)).await;
+
     info!("{} has come online", ready.user.name);
   }
 
@@ -36,7 +40,7 @@ impl EventHandler for Handler {
             response
               .kind(serenity::model::prelude::interaction::InteractionResponseType::ChannelMessageWithSource)
               .interaction_response_data(|message| {
-                message.content("This command can only be used in a server")
+                message.content("You can only execute commands inside of a server")
               })
           })
           .await

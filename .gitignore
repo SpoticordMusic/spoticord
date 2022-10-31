@@ -7,3 +7,8 @@
 
 # Secrets
 .env
+
+# Editors
+.vscode
+.vs
+.fleet

@@ -1,4 +1,8 @@
+use std::error::Error;
+
+use librespot::core::spotify_id::SpotifyId;
 use log::{error, trace};
+use serde::Deserialize;
 use serde_json::Value;
 
 pub async fn get_username(token: impl Into<String>) -> Result<String, String> {
@@ -33,4 +37,99 @@ pub async fn get_username(token: impl Into<String>) -> Result<String, String> {
 
   error!("Missing 'id' field in body");
   Err("Failed to parse body: Invalid body received".to_string())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Artist {
+  pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Image {
+  pub url: String,
+  pub height: u32,
+  pub width: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Album {
+  pub name: String,
+  pub images: Vec<Image>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Track {
+  pub name: String,
+  pub artists: Vec<Artist>,
+  pub album: Album,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Show {
+  pub name: String,
+  pub images: Vec<Image>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Episode {
+  pub name: String,
+  pub show: Show,
+}
+
+pub async fn get_track_info(
+  token: impl Into<String>,
+  track: SpotifyId,
+) -> Result<Track, Box<dyn Error>> {
+  let token = token.into();
+  let client = reqwest::Client::new();
+
+  let response = client
+    .get(format!(
+      "https://api.spotify.com/v1/tracks/{}",
+      track.to_base62()?
+    ))
+    .bearer_auth(token)
+    .send()
+    .await?;
+
+  if response.status() != 200 {
+    return Err(
+      format!(
+        "Failed to get track info: Invalid status code: {}",
+        response.status()
+      )
+      .into(),
+    );
+  }
+
+  Ok(response.json().await?)
+}
+
+pub async fn get_episode_info(
+  token: impl Into<String>,
+  episode: SpotifyId,
+) -> Result<Episode, Box<dyn Error>> {
+  let token = token.into();
+  let client = reqwest::Client::new();
+
+  let response = client
+    .get(format!(
+      "https://api.spotify.com/v1/episodes/{}",
+      episode.to_base62()?
+    ))
+    .bearer_auth(token)
+    .send()
+    .await?;
+
+  if response.status() != 200 {
+    return Err(
+      format!(
+        "Failed to get episode info: Invalid status code: {}",
+        response.status()
+      )
+      .into(),
+    );
+  }
+
+  Ok(response.json().await?)
 }

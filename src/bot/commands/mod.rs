@@ -11,11 +11,38 @@ use serenity::{
   prelude::{Context, TypeMapKey},
 };
 
+use crate::utils::embed::{make_embed_message, EmbedMessageOptions};
+
 mod core;
 mod music;
 
+#[cfg(debug_assertions)]
 mod ping;
+
+#[cfg(debug_assertions)]
 mod token;
+
+pub async fn respond_message(
+  ctx: &Context,
+  command: &ApplicationCommandInteraction,
+  options: EmbedMessageOptions,
+  ephemeral: bool,
+) {
+  if let Err(why) = command
+    .create_interaction_response(&ctx.http, |response| {
+      response
+        .kind(InteractionResponseType::ChannelMessageWithSource)
+        .interaction_response_data(|message| {
+          message
+            .embed(|embed| make_embed_message(embed, options))
+            .ephemeral(ephemeral)
+        })
+    })
+    .await
+  {
+    error!("Error sending message: {:?}", why);
+  }
+}
 
 pub type CommandOutput = Pin<Box<dyn Future<Output = ()> + Send>>;
 pub type CommandExecutor = fn(Context, ApplicationCommandInteraction) -> CommandOutput;
@@ -44,11 +71,22 @@ impl CommandManager {
     }
 
     // Core commands
+    instance.insert_command(core::help::NAME, core::help::register, core::help::run);
+    instance.insert_command(
+      core::version::NAME,
+      core::version::register,
+      core::version::run,
+    );
     instance.insert_command(core::link::NAME, core::link::register, core::link::run);
     instance.insert_command(
       core::unlink::NAME,
       core::unlink::register,
       core::unlink::run,
+    );
+    instance.insert_command(
+      core::rename::NAME,
+      core::rename::register,
+      core::rename::run,
     );
 
     // Music commands
@@ -57,6 +95,11 @@ impl CommandManager {
       music::leave::NAME,
       music::leave::register,
       music::leave::run,
+    );
+    instance.insert_command(
+      music::playing::NAME,
+      music::playing::register,
+      music::playing::run,
     );
 
     instance
@@ -93,8 +136,8 @@ impl CommandManager {
       cmds: &HashMap<String, CommandInfo>,
       mut commands: &'a mut CreateApplicationCommands,
     ) -> &'a mut CreateApplicationCommands {
-      for cmd in cmds {
-        commands = commands.create_application_command(|command| (cmd.1.register)(command));
+      for (_, command_info) in cmds {
+        commands = commands.create_application_command(|command| (command_info.register)(command));
       }
 
       commands

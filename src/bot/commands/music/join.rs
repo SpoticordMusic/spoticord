@@ -1,40 +1,16 @@
-use log::error;
 use serenity::{
   builder::CreateApplicationCommand,
-  model::prelude::interaction::{
-    application_command::ApplicationCommandInteraction, InteractionResponseType,
-  },
+  model::prelude::interaction::application_command::ApplicationCommandInteraction,
   prelude::Context,
-  Result as SerenityResult,
 };
 
 use crate::{
-  bot::commands::CommandOutput,
+  bot::commands::{respond_message, CommandOutput},
   session::manager::{SessionCreateError, SessionManager},
+  utils::embed::{EmbedBuilder, Status},
 };
 
 pub const NAME: &str = "join";
-
-async fn respond_message(
-  ctx: &Context,
-  command: &ApplicationCommandInteraction,
-  msg: impl Into<String>,
-  ephemeral: bool,
-) -> SerenityResult<()> {
-  command
-    .create_interaction_response(&ctx.http, |response| {
-      response
-        .kind(InteractionResponseType::ChannelMessageWithSource)
-        .interaction_response_data(|message| message.content(msg.into()).ephemeral(ephemeral))
-    })
-    .await
-}
-
-fn check_msg(result: SerenityResult<()>) {
-  if let Err(why) = result {
-    error!("Error sending message: {:?}", why);
-  }
-}
 
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
@@ -48,15 +24,18 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     {
       Some(channel_id) => channel_id,
       None => {
-        check_msg(
-          respond_message(
-            &ctx,
-            &command,
-            "You need to connect to a voice channel",
-            true,
-          )
-          .await,
-        );
+        respond_message(
+          &ctx,
+          &command,
+          EmbedBuilder::new()
+            .title("Cannot join voice channel")
+            .icon_url("https://spoticord.com/static/image/prohibited.png")
+            .description("You need to connect to a voice channel")
+            .status(Status::Error)
+            .build(),
+          true,
+        )
+        .await;
 
         return;
       }
@@ -66,71 +45,143 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     let mut session_manager = data.get::<SessionManager>().unwrap().clone();
 
     // Check if another session is already active in this server
-    if let Some(session) = session_manager.get_session(guild.id).await {
-      let msg = if session.get_owner() == command.user.id {
-        "You are already playing music in this server"
-      } else {
-        "Someone else is already playing music in this server"
-      };
+    let session_opt = session_manager.get_session(guild.id).await;
+    if let Some(session) = &session_opt {
+      if let Some(owner) = session.get_owner().await {
+        let msg = if owner == command.user.id {
+          "You are already controlling the bot"
+        } else {
+          "The bot is currently being controlled by someone else"
+        };
 
-      check_msg(respond_message(&ctx, &command, msg, true).await);
+        respond_message(
+          &ctx,
+          &command,
+          EmbedBuilder::new()
+            .title("Cannot join voice channel")
+            .icon_url("https://spoticord.com/static/image/prohibited.png")
+            .description(msg)
+            .status(Status::Error)
+            .build(),
+          true,
+        )
+        .await;
 
-      return;
+        return;
+      }
     };
 
     // Prevent duplicate Spotify sessions
     if let Some(session) = session_manager.find(command.user.id).await {
-      check_msg(
-        respond_message(
+      respond_message(
           &ctx,
           &command,
+          EmbedBuilder::new()
+          .title("Cannot join voice channel")
+          .icon_url("https://spoticord.com/static/image/prohibited.png")
+          .description(
           format!(
             "You are already playing music in another server ({}).\nStop playing in that server first before joining this one.",
             ctx.cache.guild(session.get_guild_id()).unwrap().name
-          ),
+          )).status(Status::Error).build(),
           true,
         )
-        .await,
-      );
+        .await;
 
       return;
     }
 
-    // Create the session, and handle potential errors
-    if let Err(why) = session_manager
-      .create_session(&ctx, guild.id, channel_id, command.user.id)
-      .await
-    {
-      // Need to link first
-      if let SessionCreateError::NoSpotifyError = why {
-        check_msg(
+    if let Some(session) = &session_opt {
+      if let Err(why) = session.update_owner(&ctx, command.user.id).await {
+        // Need to link first
+        if let SessionCreateError::NoSpotifyError = why {
           respond_message(
             &ctx,
             &command,
-            "You need to link your Spotify account. Use `/link` or go to https://account.spoticord.com/ to get started.",
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .icon_url("https://spoticord.com/static/image/prohibited.png")
+              .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to https://account.spoticord.com/ to get started.")
+              .status(Status::Error)
+              .build(),
             true,
           )
-          .await,
-        );
+          .await;
 
-        return;
-      }
+          return;
+        }
 
-      // Any other error
-      check_msg(
+        // Any other error
         respond_message(
           &ctx,
           &command,
-          "An error occurred while joining the channel. Please try again later.",
+          EmbedBuilder::new()
+            .title("Cannot join voice channel")
+            .icon_url("https://spoticord.com/static/image/prohibited.png")
+            .description("An error occured while joining the channel. Please try again later.")
+            .status(Status::Error)
+            .build(),
           true,
         )
-        .await,
-      );
+        .await;
 
-      return;
-    };
+        return;
+      }
+    } else {
+      // Create the session, and handle potential errors
+      if let Err(why) = session_manager
+        .create_session(&ctx, guild.id, channel_id, command.user.id)
+        .await
+      {
+        // Need to link first
+        if let SessionCreateError::NoSpotifyError = why {
+          respond_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .icon_url("https://spoticord.com/static/image/prohibited.png")
+              .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to https://account.spoticord.com/ to get started.")
+              .status(Status::Error)
+              .build(),
+            true,
+          )
+          .await;
 
-    check_msg(respond_message(&ctx, &command, "Joined the voice channel.", false).await);
+          return;
+        }
+
+        // Any other error
+        respond_message(
+          &ctx,
+          &command,
+          EmbedBuilder::new()
+            .title("Cannot join voice channel")
+            .icon_url("https://spoticord.com/static/image/prohibited.png")
+            .description("An error occured while joining the channel. Please try again later.")
+            .status(Status::Error)
+            .build(),
+          true,
+        )
+        .await;
+
+        return;
+      };
+    }
+
+    respond_message(
+      &ctx,
+      &command,
+      EmbedBuilder::new()
+        .title("Connected to voice channel")
+        .icon_url("https://spoticord.com/static/image/speaker.png")
+        .description(format!("Come listen along in <#{}>", channel_id))
+        .footer("Spotify will automatically start playing on Spoticord")
+        .status(Status::Success)
+        .build(),
+      false,
+    )
+    .await;
   })
 }
 

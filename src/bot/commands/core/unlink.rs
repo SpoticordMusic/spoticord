@@ -1,41 +1,18 @@
 use log::error;
 use serenity::{
   builder::CreateApplicationCommand,
-  model::prelude::interaction::{
-    application_command::ApplicationCommandInteraction, InteractionResponseType,
-  },
+  model::prelude::interaction::application_command::ApplicationCommandInteraction,
   prelude::Context,
-  Result as SerenityResult,
 };
 
 use crate::{
-  bot::commands::CommandOutput,
+  bot::commands::{respond_message, CommandOutput},
   database::{Database, DatabaseError},
   session::manager::SessionManager,
+  utils::embed::{EmbedBuilder, Status},
 };
 
 pub const NAME: &str = "unlink";
-
-async fn respond_message(
-  ctx: &Context,
-  command: &ApplicationCommandInteraction,
-  msg: impl Into<String>,
-  ephemeral: bool,
-) -> SerenityResult<()> {
-  command
-    .create_interaction_response(&ctx.http, |response| {
-      response
-        .kind(InteractionResponseType::ChannelMessageWithSource)
-        .interaction_response_data(|message| message.content(msg.into()).ephemeral(ephemeral))
-    })
-    .await
-}
-
-fn check_msg(result: SerenityResult<()>) {
-  if let Err(why) = result {
-    error!("Error sending message: {:?}", why);
-  }
-}
 
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
@@ -45,9 +22,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
     // Disconnect session if user has any
     if let Some(session) = session_manager.find(command.user.id).await {
-      if let Err(why) = session.disconnect().await {
-        error!("Error disconnecting session: {:?}", why);
-      }
+      session.disconnect().await;
     }
 
     // Check if user exists in the first place
@@ -57,15 +32,16 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     {
       if let DatabaseError::InvalidStatusCode(status) = why {
         if status == 404 {
-          check_msg(
-            respond_message(
-              &ctx,
-              &command,
-              "You cannot unlink your Spotify account if you currently don't have a linked Spotify account.",
-              true,
-            )
-            .await,
-          );
+          respond_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .description("You cannot unlink your Spotify account if you haven't linked one.")
+              .status(Status::Error)
+              .build(),
+            true,
+          )
+          .await;
 
           return;
         }
@@ -73,28 +49,30 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
       error!("Error deleting user account: {:?}", why);
 
-      check_msg(
-        respond_message(
+      respond_message(
           &ctx,
           &command,
-          "An unexpected error has occured while trying to unlink your account. Please try again later.",
+          EmbedBuilder::new()
+                .description("An unexpected error has occured while trying to unlink your account. Please try again later.")
+                .status(Status::Error)
+                .build(),
           true,
         )
-        .await,
-      );
+        .await;
 
       return;
     }
 
-    check_msg(
-      respond_message(
-        &ctx,
-        &command,
-        "Successfully unlinked your Spotify account from Spoticord",
-        true,
-      )
-      .await,
-    );
+    respond_message(
+      &ctx,
+      &command,
+      EmbedBuilder::new()
+        .description("Successfully unlinked your Spotify account from Spoticord")
+        .status(Status::Success)
+        .build(),
+      true,
+    )
+    .await;
   })
 }
 

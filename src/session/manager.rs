@@ -60,10 +60,32 @@ impl SessionManager {
     Ok(())
   }
 
-  /// Remove (and destroy) a session
+  /// Remove a session
   pub async fn remove_session(&mut self, guild_id: GuildId) {
     let mut sessions = self.sessions.write().await;
+
+    if let Some(session) = sessions.get(&guild_id) {
+      if let Some(owner) = session.get_owner().await {
+        let mut owner_map = self.owner_map.write().await;
+        owner_map.remove(&owner);
+      }
+    }
+
     sessions.remove(&guild_id);
+  }
+
+  /// Remove owner from owner map.
+  /// Used whenever a user stops playing music without leaving the bot.
+  pub async fn remove_owner(&mut self, owner_id: UserId) {
+    let mut owner_map = self.owner_map.write().await;
+    owner_map.remove(&owner_id);
+  }
+
+  /// Set the owner of a session
+  /// Used when a user joins a session that is already active
+  pub async fn set_owner(&mut self, owner_id: UserId, guild_id: GuildId) {
+    let mut owner_map = self.owner_map.write().await;
+    owner_map.insert(owner_id, guild_id);
   }
 
   /// Get a session by its guild ID
@@ -81,5 +103,20 @@ impl SessionManager {
     let guild_id = owner_map.get(&owner_id)?;
 
     sessions.get(&guild_id).cloned()
+  }
+
+  /// Get the amount of sessions with an owner
+  pub async fn get_active_session_count(&self) -> usize {
+    let sessions = self.sessions.read().await;
+
+    let mut count: usize = 0;
+
+    for session in sessions.values() {
+      if session.owner.read().await.is_some() {
+        count += 1;
+      }
+    }
+
+    count
   }
 }

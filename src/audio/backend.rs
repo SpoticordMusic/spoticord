@@ -154,7 +154,7 @@ impl SinkAsBytes for StdoutSink {
       buffer.len()
     };
 
-    while get_buffer_len() > BUFFER_SIZE * 5 {
+    while get_buffer_len() > BUFFER_SIZE * 2 {
       std::thread::sleep(Duration::from_millis(15));
     }
 

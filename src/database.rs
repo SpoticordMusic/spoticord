@@ -18,6 +18,9 @@ pub enum DatabaseError {
 
   #[error("An invalid status code was returned from a request: {0}")]
   InvalidStatusCode(StatusCode),
+
+  #[error("An invalid input body was provided: {0}")]
+  InvalidInputBody(String),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -78,6 +81,7 @@ enum Method {
   Post,
   Put,
   Delete,
+  Patch,
 }
 
 impl Database {
@@ -112,6 +116,7 @@ impl Database {
       Method::Post => client.post(url),
       Method::Put => client.put(url),
       Method::Delete => client.delete(url),
+      Method::Patch => client.patch(url),
     };
 
     request = if let Some(body) = options.body {
@@ -157,9 +162,43 @@ impl Database {
 
     Ok(body)
   }
+
+  async fn json_post<T: DeserializeOwned>(
+    &self,
+    value: impl Serialize,
+    path: impl Into<String>,
+  ) -> Result<T, DatabaseError> {
+    let body = json!(value);
+
+    let response = match self
+      .request(RequestOptions {
+        method: Method::Post,
+        path: path.into(),
+        body: Some(Body::Json(body)),
+        headers: None,
+      })
+      .await
+    {
+      Ok(response) => response,
+      Err(error) => return Err(DatabaseError::IOError(error.to_string())),
+    };
+
+    match response.status() {
+      StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED | StatusCode::NO_CONTENT => {}
+      status => return Err(DatabaseError::InvalidStatusCode(status)),
+    };
+
+    let body = match response.json::<T>().await {
+      Ok(body) => body,
+      Err(error) => return Err(DatabaseError::ParseError(error.to_string())),
+    };
+
+    Ok(body)
+  }
 }
 
 impl Database {
+  // Get Spoticord user
   pub async fn get_user(&self, user_id: impl Into<String>) -> Result<User, DatabaseError> {
     let path = format!("/user/{}", user_id.into());
 
@@ -200,6 +239,17 @@ impl Database {
       .await?;
 
     Ok(body)
+  }
+
+  // Create a Spoticord user
+  pub async fn create_user(&self, user_id: impl Into<String>) -> Result<User, DatabaseError> {
+    let body = json!({
+     "id": user_id.into(),
+    });
+
+    let user: User = self.json_post(body, "/user/new").await?;
+
+    Ok(user)
   }
 
   // Create the link Request for a user
@@ -261,6 +311,42 @@ impl Database {
     };
 
     Ok(())
+  }
+
+  pub async fn update_user_device_name(
+    &self,
+    user_id: impl Into<String>,
+    name: impl Into<String>,
+  ) -> Result<(), DatabaseError> {
+    let device_name: String = name.into();
+
+    if device_name.len() > 16 || device_name.len() < 1 {
+      return Err(DatabaseError::InvalidInputBody(
+        "Invalid device name length".into(),
+      ));
+    }
+
+    let body = json!({ "device_name": device_name });
+
+    let response = match self
+      .request(RequestOptions {
+        method: Method::Patch,
+        path: format!("/user/{}", user_id.into()),
+        body: Some(Body::Json(body)),
+        headers: None,
+      })
+      .await
+    {
+      Ok(response) => response,
+      Err(err) => return Err(DatabaseError::IOError(err.to_string())),
+    };
+
+    match response.status() {
+      StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED | StatusCode::NO_CONTENT => {
+        Ok(())
+      }
+      status => return Err(DatabaseError::InvalidStatusCode(status)),
+    }
   }
 }
 
