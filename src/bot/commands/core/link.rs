@@ -1,4 +1,5 @@
 use log::error;
+use reqwest::StatusCode;
 use serenity::{
   builder::CreateApplicationCommand,
   model::prelude::interaction::application_command::ApplicationCommandInteraction,
@@ -7,7 +8,7 @@ use serenity::{
 
 use crate::{
   bot::commands::{respond_message, CommandOutput},
-  database::Database,
+  database::{Database, DatabaseError},
   utils::embed::{EmbedBuilder, Status},
 };
 
@@ -55,6 +56,45 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       .await;
 
       return;
+    }
+
+    // Check if user exists, if not, create them
+    if let Err(why) = database.get_user(command.user.id.to_string()).await {
+      match why {
+        DatabaseError::InvalidStatusCode(StatusCode::NOT_FOUND) => {
+          if let Err(why) = database.create_user(command.user.id.to_string()).await {
+            error!("Error creating user: {:?}", why);
+
+            respond_message(
+              &ctx,
+              &command,
+              EmbedBuilder::new()
+                .description("Something went wrong while trying to link your Spotify account.")
+                .status(Status::Error)
+                .build(),
+              true,
+            )
+            .await;
+
+            return;
+          }
+        }
+
+        _ => {
+          respond_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .description("Something went wrong while trying to link your Spotify account.")
+              .status(Status::Error)
+              .build(),
+            true,
+          )
+          .await;
+
+          return;
+        }
+      }
     }
 
     match database
