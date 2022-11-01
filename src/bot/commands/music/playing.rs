@@ -103,11 +103,11 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     description.push_str(&format!("{} / {}", utils::time_to_str(position / 1000), utils::time_to_str(pbi.duration_ms / 1000)));
 
     // Get owner of session
-    let owner = match ctx.cache.user(owner) {
+    let owner = match utils::discord::get_user(&ctx, owner).await {
       Some(user) => user,
       None => {
         // This shouldn't happen
-        // TODO: This can happen, idk when
+        // TODO: Test if this can no longer happen
 
         error!("Could not find user with id {}", owner);
 

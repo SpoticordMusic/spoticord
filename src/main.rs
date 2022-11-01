@@ -14,6 +14,7 @@ use crate::{
 
 mod audio;
 mod bot;
+mod consts;
 mod database;
 mod ipc;
 mod librespot_ext;

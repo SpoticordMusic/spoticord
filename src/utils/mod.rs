@@ -1,6 +1,5 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub mod consts;
 pub mod discord;
 pub mod embed;
 pub mod spotify;

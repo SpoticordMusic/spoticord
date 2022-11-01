@@ -7,7 +7,7 @@ use serenity::{
   prelude::{Context, EventHandler},
 };
 
-use crate::utils::consts::MOTD;
+use crate::consts::MOTD;
 
 use super::commands::CommandManager;
 

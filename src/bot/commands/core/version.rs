@@ -7,10 +7,7 @@ use serenity::{
   prelude::Context,
 };
 
-use crate::{
-  bot::commands::CommandOutput,
-  utils::{consts::VERSION, embed::Status},
-};
+use crate::{bot::commands::CommandOutput, consts::VERSION, utils::embed::Status};
 
 pub const NAME: &str = "version";
 
