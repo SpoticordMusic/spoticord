@@ -34,7 +34,7 @@ pub struct User {
   pub id: String,
   pub device_name: String,
   pub request: Option<Request>,
-  pub accounts: Vec<Account>,
+  pub accounts: Option<Vec<Account>>,
 }
 
 #[derive(Deserialize)]
