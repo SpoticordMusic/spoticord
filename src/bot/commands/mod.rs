@@ -44,6 +44,21 @@ pub async fn respond_message(
   }
 }
 
+pub async fn update_message(
+  ctx: &Context,
+  command: &ApplicationCommandInteraction,
+  options: EmbedMessageOptions,
+) {
+  if let Err(why) = command
+    .edit_original_interaction_response(&ctx.http, |message| {
+      message.embed(|embed| make_embed_message(embed, options))
+    })
+    .await
+  {
+    error!("Error sending message: {:?}", why);
+  }
+}
+
 pub async fn defer_message(
   ctx: &Context,
   command: &ApplicationCommandInteraction,

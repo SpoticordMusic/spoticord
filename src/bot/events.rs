@@ -35,8 +35,6 @@ impl EventHandler for Handler {
 
   // INTERACTION_CREATE event, emitted when the bot receives an interaction (slash command, button, etc.)
   async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-    trace!("interaction_create START");
-
     if let Interaction::ApplicationCommand(command) = interaction {
       // Commands must only be executed inside of guilds
 
@@ -72,7 +70,5 @@ impl EventHandler for Handler {
 
       command_manager.execute_command(&ctx, command).await;
     }
-
-    trace!("interaction_create END");
   }
 }

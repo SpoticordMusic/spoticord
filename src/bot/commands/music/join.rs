@@ -5,7 +5,7 @@ use serenity::{
 };
 
 use crate::{
-  bot::commands::{defer_message, respond_message, CommandOutput},
+  bot::commands::{defer_message, respond_message, update_message, CommandOutput},
   session::manager::{SessionCreateError, SessionManager},
   utils::embed::{EmbedBuilder, Status},
 };
@@ -92,13 +92,13 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       return;
     }
 
-    defer_message(&ctx, &command, true).await;
+    defer_message(&ctx, &command, false).await;
 
     if let Some(session) = &session_opt {
       if let Err(why) = session.update_owner(&ctx, command.user.id).await {
         // Need to link first
         if let SessionCreateError::NoSpotifyError = why {
-          respond_message(
+          update_message(
             &ctx,
             &command,
             EmbedBuilder::new()
@@ -107,7 +107,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
               .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
               .status(Status::Error)
               .build(),
-            true,
           )
           .await;
 
@@ -115,7 +114,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         }
 
         // Any other error
-        respond_message(
+        update_message(
           &ctx,
           &command,
           EmbedBuilder::new()
@@ -124,7 +123,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
             .description("An error occured while joining the channel. Please try again later.")
             .status(Status::Error)
             .build(),
-          true,
         )
         .await;
 
@@ -138,7 +136,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       {
         // Need to link first
         if let SessionCreateError::NoSpotifyError = why {
-          respond_message(
+          update_message(
             &ctx,
             &command,
             EmbedBuilder::new()
@@ -147,7 +145,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
               .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
               .status(Status::Error)
               .build(),
-            true,
           )
           .await;
 
@@ -155,7 +152,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         }
 
         // Any other error
-        respond_message(
+        update_message(
           &ctx,
           &command,
           EmbedBuilder::new()
@@ -164,7 +161,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
             .description("An error occured while joining the channel. Please try again later.")
             .status(Status::Error)
             .build(),
-          true,
         )
         .await;
 
@@ -172,7 +168,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       };
     }
 
-    respond_message(
+    update_message(
       &ctx,
       &command,
       EmbedBuilder::new()
@@ -182,7 +178,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         .footer("Spotify will automatically start playing on Spoticord")
         .status(Status::Success)
         .build(),
-      false,
     )
     .await;
   })

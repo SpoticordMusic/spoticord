@@ -282,6 +282,8 @@ impl SpoticordSession {
           }
         };
 
+        trace!("Received IPC message: {:?}", msg);
+
         match msg {
           // Sink requests playback to start/resume
           IpcPacket::StartPlayback => {
@@ -338,7 +340,7 @@ impl SpoticordSession {
             let track_id = SpotifyId::from_uri(&track).unwrap();
 
             let was_none = ipc_instance
-              .update_playback(duration_ms, position_ms, true)
+              .update_playback(duration_ms, position_ms, false)
               .await;
 
             if was_none {
