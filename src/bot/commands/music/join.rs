@@ -1,3 +1,4 @@
+use log::trace;
 use serenity::{
   builder::CreateApplicationCommand,
   model::prelude::interaction::application_command::ApplicationCommandInteraction,
@@ -45,7 +46,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     let mut session_manager = data.get::<SessionManager>().unwrap().clone();
 
     // Check if another session is already active in this server
-    let session_opt = session_manager.get_session(guild.id).await;
+    let mut session_opt = session_manager.get_session(guild.id).await;
 
     if let Some(session) = &session_opt {
       if let Some(owner) = session.get_owner().await {
@@ -93,6 +94,17 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     }
 
     defer_message(&ctx, &command, false).await;
+
+    if let Some(session) = &session_opt {
+      trace!("{} != {}", session.get_channel_id(), channel_id);
+      if session.get_channel_id() != channel_id {
+        session.disconnect().await;
+        session_opt = None;
+
+        // Give serenity/songbird some time to register the disconnect
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+      }
+    }
 
     if let Some(session) = &session_opt {
       if let Err(why) = session.update_owner(&ctx, command.user.id).await {

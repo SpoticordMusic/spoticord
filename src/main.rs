@@ -4,13 +4,15 @@ use dotenv::dotenv;
 use log::*;
 use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
 use songbird::SerenityInit;
-use std::{env, process::exit};
-use tokio::signal::unix::SignalKind;
+use std::{any::Any, env, process::exit};
 
 use crate::{
   bot::commands::CommandManager, database::Database, session::manager::SessionManager,
   stats::StatsManager,
 };
+
+#[cfg(unix)]
+use tokio::signal::unix::SignalKind;
 
 mod audio;
 mod bot;
@@ -103,8 +105,14 @@ async fn main() {
   let shard_manager = client.shard_manager.clone();
   let cache = client.cache_and_http.cache.clone();
 
+  let mut term: Option<Box<dyn Any + Send>>;
+
   #[cfg(unix)]
-  let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
+  {
+    term = Some(Box::new(
+      tokio::signal::unix::signal(SignalKind::terminate()).unwrap(),
+    ));
+  }
 
   // Background tasks
   tokio::spawn(async move {
@@ -134,7 +142,17 @@ async fn main() {
           break;
         }
 
-        _ = sigterm.recv() => {
+        _ = async {
+          match term {
+            Some(ref mut term) => {
+              let term = term.downcast_mut::<tokio::signal::unix::Signal>().unwrap();
+
+              term.recv().await
+            }
+
+            _ => None
+          }
+        }, if term.is_some() => {
           info!("Received terminate signal, shutting down...");
 
           shard_manager.lock().await.shutdown_all().await;
