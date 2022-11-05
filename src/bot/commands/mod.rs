@@ -44,13 +44,32 @@ pub async fn respond_message(
   }
 }
 
+pub async fn defer_message(
+  ctx: &Context,
+  command: &ApplicationCommandInteraction,
+  ephemeral: bool,
+) {
+  if let Err(why) = command
+    .create_interaction_response(&ctx.http, |response| {
+      response
+        .kind(InteractionResponseType::DeferredChannelMessageWithSource)
+        .interaction_response_data(|message| message.ephemeral(ephemeral))
+    })
+    .await
+  {
+    error!("Error deferring message: {:?}", why);
+  }
+}
+
 pub type CommandOutput = Pin<Box<dyn Future<Output = ()> + Send>>;
 pub type CommandExecutor = fn(Context, ApplicationCommandInteraction) -> CommandOutput;
 
+#[derive(Clone)]
 pub struct CommandManager {
   commands: HashMap<String, CommandInfo>,
 }
 
+#[derive(Clone)]
 pub struct CommandInfo {
   pub name: String,
   pub executor: CommandExecutor,

@@ -23,7 +23,10 @@ impl EventHandler for Handler {
 
     debug!("Ready received, logged in as {}", ready.user.name);
 
-    command_manager.register_commands(&ctx).await;
+    // Set this to true only when a command is removed/updated/created
+    if false {
+      command_manager.register_commands(&ctx).await;
+    }
 
     ctx.set_activity(Activity::listening(MOTD)).await;
 
@@ -32,10 +35,15 @@ impl EventHandler for Handler {
 
   // INTERACTION_CREATE event, emitted when the bot receives an interaction (slash command, button, etc.)
   async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+    trace!("interaction_create START");
+
     if let Interaction::ApplicationCommand(command) = interaction {
       // Commands must only be executed inside of guilds
-      if command.guild_id.is_none() {
-        command
+
+      let guild_id = match command.guild_id {
+        Some(guild_id) => guild_id,
+        None => {
+          if let Err(why) = command
           .create_interaction_response(&ctx.http, |response| {
             response
               .kind(serenity::model::prelude::interaction::InteractionResponseType::ChannelMessageWithSource)
@@ -43,17 +51,20 @@ impl EventHandler for Handler {
                 message.content("You can only execute commands inside of a server")
               })
           })
-          .await
-          .unwrap();
+          .await {
+            error!("Failed to send run-in-guild-only error message: {}", why);
+          }
 
-        return;
-      }
+          trace!("interaction_create END2");
+          return;
+        }
+      };
 
       trace!(
         "Received command interaction: command={} user={} guild={}",
         command.data.name,
         command.user.id,
-        command.guild_id.unwrap()
+        guild_id
       );
 
       let data = ctx.data.read().await;
@@ -61,5 +72,7 @@ impl EventHandler for Handler {
 
       command_manager.execute_command(&ctx, command).await;
     }
+
+    trace!("interaction_create END");
   }
 }

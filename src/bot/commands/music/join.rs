@@ -5,7 +5,7 @@ use serenity::{
 };
 
 use crate::{
-  bot::commands::{respond_message, CommandOutput},
+  bot::commands::{defer_message, respond_message, CommandOutput},
   session::manager::{SessionCreateError, SessionManager},
   utils::embed::{EmbedBuilder, Status},
 };
@@ -46,6 +46,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
     // Check if another session is already active in this server
     let session_opt = session_manager.get_session(guild.id).await;
+
     if let Some(session) = &session_opt {
       if let Some(owner) = session.get_owner().await {
         let msg = if owner == command.user.id {
@@ -90,6 +91,8 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
       return;
     }
+
+    defer_message(&ctx, &command, true).await;
 
     if let Some(session) = &session_opt {
       if let Err(why) = session.update_owner(&ctx, command.user.id).await {

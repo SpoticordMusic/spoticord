@@ -46,34 +46,53 @@ pub async fn get_username(token: impl Into<String>) -> Result<String, String> {
   let token = token.into();
   let client = reqwest::Client::new();
 
-  let response = match client
-    .get("https://api.spotify.com/v1/me")
-    .bearer_auth(token)
-    .send()
-    .await
-  {
-    Ok(response) => response,
-    Err(why) => {
-      error!("Failed to get username: {}", why);
-      return Err(format!("{}", why));
-    }
-  };
+  let mut retries = 3;
 
-  let body: Value = match response.json().await {
-    Ok(body) => body,
-    Err(why) => {
-      error!("Failed to parse body: {}", why);
-      return Err(format!("{}", why));
-    }
-  };
+  loop {
+    let response = match client
+      .get("https://api.spotify.com/v1/me")
+      .bearer_auth(&token)
+      .send()
+      .await
+    {
+      Ok(response) => response,
+      Err(why) => {
+        error!("Failed to get username: {}", why);
+        return Err(format!("{}", why));
+      }
+    };
 
-  if let Value::String(username) = &body["id"] {
-    trace!("Got username: {}", username);
-    return Ok(username.clone());
+    if response.status().as_u16() >= 500 && retries > 0 {
+      retries -= 1;
+      continue;
+    }
+
+    if response.status() != 200 {
+      return Err(
+        format!(
+          "Failed to get track info: Invalid status code: {}",
+          response.status()
+        )
+        .into(),
+      );
+    }
+
+    let body: Value = match response.json().await {
+      Ok(body) => body,
+      Err(why) => {
+        error!("Failed to parse body: {}", why);
+        return Err(format!("{}", why));
+      }
+    };
+
+    if let Value::String(username) = &body["id"] {
+      trace!("Got username: {}", username);
+      return Ok(username.clone());
+    }
+
+    error!("Missing 'id' field in body: {:#?}", body);
+    return Err("Failed to parse body: Invalid body received".to_string());
   }
-
-  error!("Missing 'id' field in body");
-  Err("Failed to parse body: Invalid body received".to_string())
 }
 
 pub async fn get_track_info(
@@ -83,26 +102,35 @@ pub async fn get_track_info(
   let token = token.into();
   let client = reqwest::Client::new();
 
-  let response = client
-    .get(format!(
-      "https://api.spotify.com/v1/tracks/{}",
-      track.to_base62()?
-    ))
-    .bearer_auth(token)
-    .send()
-    .await?;
+  let mut retries = 3;
 
-  if response.status() != 200 {
-    return Err(
-      format!(
-        "Failed to get track info: Invalid status code: {}",
-        response.status()
-      )
-      .into(),
-    );
+  loop {
+    let response = client
+      .get(format!(
+        "https://api.spotify.com/v1/tracks/{}",
+        track.to_base62()?
+      ))
+      .bearer_auth(&token)
+      .send()
+      .await?;
+
+    if response.status().as_u16() >= 500 && retries > 0 {
+      retries -= 1;
+      continue;
+    }
+
+    if response.status() != 200 {
+      return Err(
+        format!(
+          "Failed to get track info: Invalid status code: {}",
+          response.status()
+        )
+        .into(),
+      );
+    }
+
+    return Ok(response.json().await?);
   }
-
-  Ok(response.json().await?)
 }
 
 pub async fn get_episode_info(
@@ -112,24 +140,33 @@ pub async fn get_episode_info(
   let token = token.into();
   let client = reqwest::Client::new();
 
-  let response = client
-    .get(format!(
-      "https://api.spotify.com/v1/episodes/{}",
-      episode.to_base62()?
-    ))
-    .bearer_auth(token)
-    .send()
-    .await?;
+  let mut retries = 3;
 
-  if response.status() != 200 {
-    return Err(
-      format!(
-        "Failed to get episode info: Invalid status code: {}",
-        response.status()
-      )
-      .into(),
-    );
+  loop {
+    let response = client
+      .get(format!(
+        "https://api.spotify.com/v1/episodes/{}",
+        episode.to_base62()?
+      ))
+      .bearer_auth(&token)
+      .send()
+      .await?;
+
+    if response.status().as_u16() >= 500 && retries > 0 {
+      retries -= 1;
+      continue;
+    }
+
+    if response.status() != 200 {
+      return Err(
+        format!(
+          "Failed to get episode info: Invalid status code: {}",
+          response.status()
+        )
+        .into(),
+      );
+    }
+
+    return Ok(response.json().await?);
   }
-
-  Ok(response.json().await?)
 }

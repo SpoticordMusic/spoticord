@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use ipc_channel::ipc::{self, IpcError, IpcOneShotServer, IpcReceiver, IpcSender};
+use ipc_channel::ipc::{self, IpcError, IpcOneShotServer, IpcReceiver, IpcSender, TryRecvError};
 
 use self::packet::IpcPacket;
 
@@ -65,5 +65,9 @@ impl Client {
 
   pub fn recv(&self) -> Result<IpcPacket, IpcError> {
     self.rx.lock().unwrap().recv()
+  }
+
+  pub fn try_recv(&self) -> Result<IpcPacket, TryRecvError> {
+    self.rx.lock().unwrap().try_recv()
   }
 }

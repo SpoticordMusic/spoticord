@@ -49,10 +49,11 @@ impl SessionManager {
     channel_id: ChannelId,
     owner_id: UserId,
   ) -> Result<(), SessionCreateError> {
+    // Create session first to make sure locks are kept for as little time as possible
+    let session = SpoticordSession::new(ctx, guild_id, channel_id, owner_id).await?;
+
     let mut sessions = self.sessions.write().await;
     let mut owner_map = self.owner_map.write().await;
-
-    let session = SpoticordSession::new(ctx, guild_id, channel_id, owner_id).await?;
 
     sessions.insert(guild_id, Arc::new(session));
     owner_map.insert(owner_id, guild_id);

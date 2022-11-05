@@ -23,7 +23,7 @@ mod session;
 mod stats;
 mod utils;
 
-#[tokio::main(flavor = "multi_thread")]
+#[tokio::main]
 async fn main() {
   if std::env::var("RUST_LOG").is_err() {
     #[cfg(debug_assertions)]
@@ -38,6 +38,14 @@ async fn main() {
   }
 
   env_logger::init();
+
+  let orig_hook = std::panic::take_hook();
+  std::panic::set_hook(Box::new(move |panic_info| {
+    error!("Panic: {}", panic_info);
+
+    orig_hook(panic_info);
+    std::process::exit(1);
+  }));
 
   let args: Vec<String> = env::args().collect();
 
@@ -95,6 +103,7 @@ async fn main() {
   let shard_manager = client.shard_manager.clone();
   let cache = client.cache_and_http.cache.clone();
 
+  #[cfg(unix)]
   let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
 
   // Background tasks

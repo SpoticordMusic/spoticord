@@ -4,7 +4,7 @@ use crate::{
   ipc::{self, packet::IpcPacket, Client},
   utils::{self, spotify},
 };
-use ipc_channel::ipc::IpcError;
+use ipc_channel::ipc::{IpcError, TryRecvError};
 use librespot::core::spotify_id::{SpotifyAudioType, SpotifyId};
 use log::*;
 use serenity::{
@@ -21,6 +21,7 @@ use songbird::{
 use std::{
   process::{Command, Stdio},
   sync::Arc,
+  time::Duration,
 };
 use tokio::sync::Mutex;
 
@@ -262,11 +263,18 @@ impl SpoticordSession {
         // Required for IpcPacket::TrackChange to work
         tokio::task::yield_now().await;
 
-        let msg = match ipc_client.recv() {
+        let msg = match ipc_client.try_recv() {
           Ok(msg) => msg,
           Err(why) => {
-            if let IpcError::Disconnected = why {
-              break;
+            if let TryRecvError::Empty = why {
+              // No message, wait a bit and try again
+              tokio::time::sleep(Duration::from_millis(25)).await;
+
+              continue;
+            } else if let TryRecvError::IpcError(why) = &why {
+              if let IpcError::Disconnected = why {
+                break;
+              }
             }
 
             error!("Failed to receive IPC message: {:?}", why);
@@ -407,8 +415,10 @@ impl SpoticordSession {
       }
     };
 
-    let mut owner = self.owner.write().await;
-    *owner = Some(owner_id);
+    {
+      let mut owner = self.owner.write().await;
+      *owner = Some(owner_id);
+    }
 
     session_manager.set_owner(owner_id, self.guild_id).await;
 
