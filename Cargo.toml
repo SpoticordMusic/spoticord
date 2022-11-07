@@ -12,6 +12,7 @@ lto = true
 codegen-units = 1
 strip = true
 opt-level = "z"
+panic = "abort"
 
 [dependencies]
 chrono = "0.4.22"
