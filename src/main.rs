@@ -68,7 +68,7 @@ async fn main() {
     warn!("No .env file found, expecting all necessary environment variables");
   }
 
-  let token = env::var("TOKEN").expect("a token in the environment");
+  let token = env::var("DISCORD_TOKEN").expect("a token in the environment");
   let db_url = env::var("DATABASE_URL").expect("a database URL in the environment");
   let kv_url = env::var("KV_URL").expect("a redis URL in the environment");
 
