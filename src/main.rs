@@ -41,14 +41,6 @@ async fn main() {
 
   env_logger::init();
 
-  let orig_hook = std::panic::take_hook();
-  std::panic::set_hook(Box::new(move |panic_info| {
-    error!("Panic: {}", panic_info);
-
-    orig_hook(panic_info);
-    std::process::exit(1);
-  }));
-
   let args: Vec<String> = env::args().collect();
 
   if args.len() > 2 {
@@ -143,6 +135,7 @@ async fn main() {
         }
 
         _ = async {
+          #[cfg(unix)]
           match term {
             Some(ref mut term) => {
               let term = term.downcast_mut::<tokio::signal::unix::Signal>().unwrap();

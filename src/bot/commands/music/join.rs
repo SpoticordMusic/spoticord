@@ -143,7 +143,13 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     } else {
       // Create the session, and handle potential errors
       if let Err(why) = session_manager
-        .create_session(&ctx, guild.id, channel_id, command.user.id)
+        .create_session(
+          &ctx,
+          guild.id,
+          channel_id,
+          command.channel_id,
+          command.user.id,
+        )
         .await
       {
         // Need to link first
@@ -188,7 +194,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         .icon_url("https://spoticord.com/static/image/speaker.png")
         .description(format!("Come listen along in <#{}>", channel_id))
         .footer("Spotify will automatically start playing on Spoticord")
-        .status(Status::Success)
+        .status(Status::Info)
         .build(),
     )
     .await;
