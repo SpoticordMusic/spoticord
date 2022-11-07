@@ -163,7 +163,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
                       .icon_url(owner.face())
                   )
                   .thumbnail(&thumbnail)
-                  .color(Status::Success as u64)
+                  .color(Status::Info as u64)
               )
           })
       })

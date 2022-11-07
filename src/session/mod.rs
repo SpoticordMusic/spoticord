@@ -49,6 +49,8 @@ pub struct SpoticordSession {
 
   playback_info: Arc<RwLock<Option<PlaybackInfo>>>,
 
+  disconnect_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+
   client: Client,
 }
 
@@ -151,6 +153,7 @@ impl SpoticordSession {
       call: call.clone(),
       track: track_handle.clone(),
       playback_info: Arc::new(RwLock::new(None)),
+      disconnect_handle: Arc::new(Mutex::new(None)),
       client: client.clone(),
     };
 
@@ -439,10 +442,8 @@ impl SpoticordSession {
     *playback_info = None;
   }
 
-  // Disconnect from voice channel and remove session from manager
-  pub async fn disconnect(&self) {
-    info!("Disconnecting from voice channel {}", self.channel_id);
-
+  /// Internal version of disconnect, which does not abort the disconnect timer
+  async fn disconnect_no_abort(&self) {
     self
       .session_manager
       .clone()
@@ -459,9 +460,23 @@ impl SpoticordSession {
     }
   }
 
+  // Disconnect from voice channel and remove session from manager
+  pub async fn disconnect(&self) {
+    info!("Disconnecting from voice channel {}", self.channel_id);
+
+    self.disconnect_no_abort().await;
+
+    // Stop the disconnect timer, if one is running
+    let mut dc_handle = self.disconnect_handle.lock().await;
+
+    if let Some(handle) = dc_handle.take() {
+      handle.abort();
+    }
+  }
+
   /// Disconnect from voice channel with a message
   pub async fn disconnect_with_message(&self, content: &str) {
-    self.disconnect().await;
+    self.disconnect_no_abort().await;
 
     if let Err(why) = self
       .text_channel_id
@@ -475,9 +490,15 @@ impl SpoticordSession {
         })
       })
       .await
-      .map(|_| ())
     {
       error!("Failed to send disconnect message: {:?}", why);
+    }
+
+    // Stop the disconnect timer, if one is running
+    let mut dc_handle = self.disconnect_handle.lock().await;
+
+    if let Some(handle) = dc_handle.take() {
+      handle.abort();
     }
   }
 
@@ -512,7 +533,14 @@ impl SpoticordSession {
     let pbi = self.playback_info.clone();
     let instance = self.clone();
 
-    tokio::spawn(async move {
+    let mut handle = self.disconnect_handle.lock().await;
+
+    // Abort the previous timer, if one is running
+    if let Some(handle) = handle.take() {
+      handle.abort();
+    }
+
+    *handle = Some(tokio::spawn(async move {
       let mut timer = tokio::time::interval(Duration::from_secs(DISCONNECT_TIME));
 
       // Ignore first (immediate) tick
@@ -541,7 +569,7 @@ impl SpoticordSession {
           break;
         }
       }
-    });
+    }));
   }
 
   // Get the playback info for the current track
