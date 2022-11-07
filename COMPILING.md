@@ -50,7 +50,7 @@ git clone https://github.com/SpoticordMusic/spoticord.git
 After cloning the repo run the following command in the root of the repository:
 
 ```sh
-cargo build --release
+cargo build
 ```
 
 Or if you want to build a release version:
