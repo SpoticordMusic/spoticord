@@ -97,14 +97,13 @@ async fn main() {
   let shard_manager = client.shard_manager.clone();
   let cache = client.cache_and_http.cache.clone();
 
-  let mut term: Option<Box<dyn Any + Send>>;
-
   #[cfg(unix)]
-  {
-    term = Some(Box::new(
-      tokio::signal::unix::signal(SignalKind::terminate()).unwrap(),
-    ));
-  }
+  let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
+    tokio::signal::unix::signal(SignalKind::terminate()).unwrap(),
+  ));
+
+  #[cfg(not(unix))]
+  let term: Option<Box<dyn Any + Send>> = None;
 
   // Background tasks
   tokio::spawn(async move {
