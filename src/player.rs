@@ -66,7 +66,10 @@ impl SpoticordPlayer {
     self.session = Some(session.clone());
 
     // Volume mixer
-    let mixer = (mixer::find(Some("softvol")).unwrap())(MixerConfig::default());
+    let mixer = (mixer::find(Some("softvol")).unwrap())(MixerConfig {
+      volume_ctrl: librespot::playback::config::VolumeCtrl::Linear,
+      ..MixerConfig::default()
+    });
 
     let client = self.client.clone();
 

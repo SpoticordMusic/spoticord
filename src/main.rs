@@ -4,13 +4,15 @@ use dotenv::dotenv;
 use log::*;
 use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
 use songbird::SerenityInit;
-use std::{env, process::exit};
-use tokio::signal::unix::SignalKind;
+use std::{any::Any, env, process::exit};
 
 use crate::{
   bot::commands::CommandManager, database::Database, session::manager::SessionManager,
   stats::StatsManager,
 };
+
+#[cfg(unix)]
+use tokio::signal::unix::SignalKind;
 
 mod audio;
 mod bot;
@@ -39,14 +41,6 @@ async fn main() {
 
   env_logger::init();
 
-  let orig_hook = std::panic::take_hook();
-  std::panic::set_hook(Box::new(move |panic_info| {
-    error!("Panic: {}", panic_info);
-
-    orig_hook(panic_info);
-    std::process::exit(1);
-  }));
-
   let args: Vec<String> = env::args().collect();
 
   if args.len() > 2 {
@@ -74,7 +68,7 @@ async fn main() {
     warn!("No .env file found, expecting all necessary environment variables");
   }
 
-  let token = env::var("TOKEN").expect("a token in the environment");
+  let token = env::var("DISCORD_TOKEN").expect("a token in the environment");
   let db_url = env::var("DATABASE_URL").expect("a database URL in the environment");
   let kv_url = env::var("KV_URL").expect("a redis URL in the environment");
 
@@ -104,7 +98,12 @@ async fn main() {
   let cache = client.cache_and_http.cache.clone();
 
   #[cfg(unix)]
-  let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate()).unwrap();
+  let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
+    tokio::signal::unix::signal(SignalKind::terminate()).unwrap(),
+  ));
+
+  #[cfg(not(unix))]
+  let term: Option<Box<dyn Any + Send>> = None;
 
   // Background tasks
   tokio::spawn(async move {
@@ -134,7 +133,18 @@ async fn main() {
           break;
         }
 
-        _ = sigterm.recv() => {
+        _ = async {
+          #[cfg(unix)]
+          match term {
+            Some(ref mut term) => {
+              let term = term.downcast_mut::<tokio::signal::unix::Signal>().unwrap();
+
+              term.recv().await
+            }
+
+            _ => None
+          }
+        }, if term.is_some() => {
           info!("Received terminate signal, shutting down...");
 
           shard_manager.lock().await.shutdown_all().await;

@@ -1,6 +1,5 @@
 use serenity::builder::CreateEmbed;
 
-#[allow(dead_code)]
 pub enum Status {
   Info = 0x0773D6,
   Success = 0x3BD65D,

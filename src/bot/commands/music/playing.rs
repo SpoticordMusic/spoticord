@@ -11,7 +11,10 @@ use serenity::{
 use crate::{
   bot::commands::{respond_message, CommandOutput},
   session::manager::SessionManager,
-  utils::{embed::{EmbedBuilder, Status}, self},
+  utils::{
+    self,
+    embed::{EmbedBuilder, Status},
+  },
 };
 
 pub const NAME: &str = "playing";
@@ -81,7 +84,11 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     };
 
     // Create title
-    let title = format!("{} - {}", pbi.get_artists().unwrap(), pbi.get_name().unwrap());
+    let title = format!(
+      "{} - {}",
+      pbi.get_artists().unwrap(),
+      pbi.get_name().unwrap()
+    );
 
     // Create description
     let mut description = String::new();
@@ -100,7 +107,11 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     }
 
     description.push_str("\n:alarm_clock: ");
-    description.push_str(&format!("{} / {}", utils::time_to_str(position / 1000), utils::time_to_str(pbi.duration_ms / 1000)));
+    description.push_str(&format!(
+      "{} / {}",
+      utils::time_to_str(position / 1000),
+      utils::time_to_str(pbi.duration_ms / 1000)
+    ));
 
     // Get owner of session
     let owner = match utils::discord::get_user(&ctx, owner).await {
@@ -116,7 +127,10 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           &command,
           EmbedBuilder::new()
             .title("[INTERNAL ERROR] Cannot get track info")
-            .description(format!("Could not find user with id {}\nThis is an issue with the bot!", owner))
+            .description(format!(
+              "Could not find user with id {}\nThis is an issue with the bot!",
+              owner
+            ))
             .status(Status::Error)
             .build(),
           true,
@@ -136,23 +150,20 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .kind(InteractionResponseType::ChannelMessageWithSource)
           .interaction_response_data(|message| {
             message
-              .embed(|embed| 
-                embed
-                  .author(|author| 
-                    author
+              .embed(|embed| embed
+                  .author(|author| author
                       .name("Currently Playing")
                       .icon_url("https://www.freepnglogos.com/uploads/spotify-logo-png/file-spotify-logo-png-4.png")
                     )
                   .title(title)
                   .url(format!("https://open.spotify.com/{}/{}", audio_type, spotify_id.to_base62().unwrap()))
                   .description(description)
-                  .footer(|footer| 
-                    footer
+                  .footer(|footer| footer
                       .text(&owner.name)
                       .icon_url(owner.face())
                   )
                   .thumbnail(&thumbnail)
-                  .color(Status::Success as u64)
+                  .color(Status::Info as u64)
               )
           })
       })
