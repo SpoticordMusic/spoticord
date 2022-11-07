@@ -19,7 +19,7 @@ use serenity::{
 };
 use songbird::{
   create_player,
-  input::{children_to_reader, Input},
+  input::{children_to_reader, Codec, Container, Input},
   tracks::TrackHandle,
   Call, Event, EventContext, EventHandler,
 };
@@ -137,7 +137,8 @@ impl SpoticordSession {
     let reader = children_to_reader::<f32>(vec![child]);
 
     // Create track (paused, fixes audio glitches)
-    let (mut track, track_handle) = create_player(Input::float_pcm(true, reader));
+    let (mut track, track_handle) =
+      create_player(Input::new(true, reader, Codec::Pcm, Container::Raw, None));
     track.pause();
 
     // Set call audio to track
@@ -548,6 +549,9 @@ impl SpoticordSession {
 
       loop {
         timer.tick().await;
+
+        // Make sure this task has not been aborted, if it has this will automatically stop execution.
+        tokio::task::yield_now().await;
 
         let is_playing = {
           let pbi = pbi.read().await;
