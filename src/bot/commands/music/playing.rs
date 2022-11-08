@@ -149,22 +149,24 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         response
           .kind(InteractionResponseType::ChannelMessageWithSource)
           .interaction_response_data(|message| {
-            message
-              .embed(|embed| embed
-                  .author(|author| author
-                      .name("Currently Playing")
-                      .icon_url("https://www.freepnglogos.com/uploads/spotify-logo-png/file-spotify-logo-png-4.png")
-                    )
-                  .title(title)
-                  .url(format!("https://open.spotify.com/{}/{}", audio_type, spotify_id.to_base62().unwrap()))
-                  .description(description)
-                  .footer(|footer| footer
-                      .text(&owner.name)
-                      .icon_url(owner.face())
-                  )
-                  .thumbnail(&thumbnail)
-                  .color(Status::Info as u64)
-              )
+            message.embed(|embed| {
+              embed
+                .author(|author| {
+                  author
+                    .name("Currently Playing")
+                    .icon_url("https://spoticord.com/spotify-logo.png")
+                })
+                .title(title)
+                .url(format!(
+                  "https://open.spotify.com/{}/{}",
+                  audio_type,
+                  spotify_id.to_base62().unwrap()
+                ))
+                .description(description)
+                .footer(|footer| footer.text(&owner.name).icon_url(owner.face()))
+                .thumbnail(&thumbnail)
+                .color(Status::Info as u64)
+            })
           })
       })
       .await
