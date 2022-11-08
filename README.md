@@ -26,6 +26,9 @@ Environment variables set this way take precedence over those in the `.env` file
 # Compiling
 For information about how to compile Spoticord from source, check out [COMPILING.md](COMPILING.md).
 
+# Contributing
+For information about how to contribute to Spoticord, check out [CONTRIBUTING.md](CONTRIBUTING.md).
+
 # Contact
 ![Discord Shield](https://discordapp.com/api/guilds/779292533053456404/widget.png?style=shield)
 
