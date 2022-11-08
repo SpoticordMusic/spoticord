@@ -118,7 +118,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       Some(user) => user,
       None => {
         // This shouldn't happen
-        // TODO: Test if this can no longer happen
 
         error!("Could not find user with id {}", owner);
 

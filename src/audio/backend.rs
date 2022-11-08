@@ -1,32 +1,52 @@
-use librespot::playback::audio_backend::{Sink, SinkAsBytes, SinkResult};
+use librespot::playback::audio_backend::{Sink, SinkAsBytes, SinkError, SinkResult};
 use librespot::playback::convert::Converter;
 use librespot::playback::decoder::AudioPacket;
-use std::io::Write;
+use log::error;
+use std::io::{Stdout, Write};
 
 use crate::ipc;
 use crate::ipc::packet::IpcPacket;
 
 pub struct StdoutSink {
   client: ipc::Client,
+  output: Option<Box<Stdout>>,
 }
 
 impl StdoutSink {
   pub fn new(client: ipc::Client) -> Self {
-    StdoutSink { client }
+    StdoutSink {
+      client,
+      output: None,
+    }
   }
 }
 
 impl Sink for StdoutSink {
   fn start(&mut self) -> SinkResult<()> {
-    // TODO: Handle error
-    self.client.send(IpcPacket::StartPlayback).unwrap();
+    if let Err(why) = self.client.send(IpcPacket::StartPlayback) {
+      error!("Failed to send start playback packet: {}", why);
+      return Err(SinkError::ConnectionRefused(why.to_string()));
+    }
+
+    self.output.get_or_insert(Box::new(std::io::stdout()));
 
     Ok(())
   }
 
   fn stop(&mut self) -> SinkResult<()> {
-    // Stop songbird's playback
-    self.client.send(IpcPacket::StopPlayback).unwrap();
+    if let Err(why) = self.client.send(IpcPacket::StopPlayback) {
+      error!("Failed to send stop playback packet: {}", why);
+      return Err(SinkError::ConnectionRefused(why.to_string()));
+    }
+
+    self
+      .output
+      .take()
+      .ok_or(SinkError::NotConnected(
+        "StdoutSink is not connected".to_string(),
+      ))?
+      .flush()
+      .map_err(|why| SinkError::OnWrite(why.to_string()))?;
 
     Ok(())
   }
@@ -58,7 +78,14 @@ impl Sink for StdoutSink {
 
 impl SinkAsBytes for StdoutSink {
   fn write_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
-    std::io::stdout().write_all(data).unwrap();
+    self
+      .output
+      .as_deref_mut()
+      .ok_or(SinkError::NotConnected(
+        "StdoutSink is not connected".to_string(),
+      ))?
+      .write_all(data)
+      .map_err(|why| SinkError::OnWrite(why.to_string()))?;
 
     Ok(())
   }

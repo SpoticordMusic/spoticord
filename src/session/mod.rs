@@ -246,8 +246,8 @@ impl SpoticordSession {
             let mut instance = ipc_instance.clone();
             let context = ipc_context.clone();
 
-            // TODO: Check if this is actually needed
-            // The new backend may have fixed the need for this
+            // Fetch track info
+            // This is done in a separate task to avoid blocking the IPC handler
             tokio::spawn(async move {
               if let Err(why) = instance.update_track(&context, &owner_id, track_id).await {
                 error!("Failed to update track: {:?}", why);
