@@ -19,8 +19,14 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       EmbedBuilder::new()
         .title("Spoticord Help")
         .icon_url("https://spoticord.com/img/logo-standard.webp")
-        .description(format!("Click **[here](https://spoticord.com/commands)** for a list of commands.\n{}",
-        "If you need help setting Spoticord up you can check out the **[Documentation](https://spoticord.com/documentation)** page on the Spoticord website.\n\n"))
+        .description(format!("**Welcome to Spoticord**
+         It seems you have requested some help. Not to worry, we can help you out.\n
+         **Not sure how the bot works?**
+         **[Click here](https://spoticord.com/#how-to)** for a quick overview about how to set up Spoticord and how to use it.\n
+         **Which commands are there?**
+         You can find all **[the commands](https://spoticord.com/#commands)** on the website. You may also just type `/` in Discord and see which commands are available there.\n
+         **Need more help?**
+         If you still need some help, whether you are having issues with the bot or you just want to give us some feedback, you can join our **[Discord server](https://discord.gg/wRCyhVqBZ5)**."))
         .status(Status::Info)
         .build(),
       false,

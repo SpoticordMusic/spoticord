@@ -59,7 +59,13 @@ impl SpoticordPlayer {
     // Connect the session
     let (session, _) = match Session::connect(session_config, credentials, None, false).await {
       Ok((session, credentials)) => (session, credentials),
-      Err(why) => panic!("Failed to connect: {}", why),
+      Err(why) => {
+        self
+          .client
+          .send(IpcPacket::ConnectError(why.to_string()))
+          .unwrap();
+        return;
+      }
     };
 
     // Store session for later use

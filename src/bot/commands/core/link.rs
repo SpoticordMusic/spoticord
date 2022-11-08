@@ -44,7 +44,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         EmbedBuilder::new()
           .title("Link your Spotify account")
           .title_url(&link)
-          .icon_url("https://spoticord.com/img/spotify-logo.png")
+          .icon_url("https://spoticord.com/spotify-logo.png")
           .description(format!(
             "Go to [this link]({}) to connect your Spotify account.",
             link
@@ -111,7 +111,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           EmbedBuilder::new()
             .title("Link your Spotify account")
             .title_url(&link)
-            .icon_url("https://spoticord.com/img/spotify-logo.png")
+            .icon_url("https://spoticord.com/spotify-logo.png")
             .description(format!(
               "Go to [this link]({}) to connect your Spotify account.",
               link

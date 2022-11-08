@@ -30,7 +30,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           &command,
           EmbedBuilder::new()
             .title("Cannot join voice channel")
-            .icon_url("https://spoticord.com/static/image/prohibited.png")
             .description("You need to connect to a voice channel")
             .status(Status::Error)
             .build(),
@@ -61,7 +60,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           &command,
           EmbedBuilder::new()
             .title("Cannot join voice channel")
-            .icon_url("https://spoticord.com/static/image/prohibited.png")
             .description(msg)
             .status(Status::Error)
             .build(),
@@ -80,7 +78,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           &command,
           EmbedBuilder::new()
           .title("Cannot join voice channel")
-          .icon_url("https://spoticord.com/static/image/prohibited.png")
           .description(
           format!(
             "You are already playing music in another server ({}).\nStop playing in that server first before joining this one.",
@@ -115,7 +112,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
             &command,
             EmbedBuilder::new()
               .title("Cannot join voice channel")
-              .icon_url("https://spoticord.com/static/image/prohibited.png")
               .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
               .status(Status::Error)
               .build(),
@@ -131,7 +127,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           &command,
           EmbedBuilder::new()
             .title("Cannot join voice channel")
-            .icon_url("https://spoticord.com/static/image/prohibited.png")
             .description("An error occured while joining the channel. Please try again later.")
             .status(Status::Error)
             .build(),
@@ -159,7 +154,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
             &command,
             EmbedBuilder::new()
               .title("Cannot join voice channel")
-              .icon_url("https://spoticord.com/static/image/prohibited.png")
               .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
               .status(Status::Error)
               .build(),
@@ -175,7 +169,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           &command,
           EmbedBuilder::new()
             .title("Cannot join voice channel")
-            .icon_url("https://spoticord.com/static/image/prohibited.png")
             .description("An error occured while joining the channel. Please try again later.")
             .status(Status::Error)
             .build(),
@@ -191,7 +184,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       &command,
       EmbedBuilder::new()
         .title("Connected to voice channel")
-        .icon_url("https://spoticord.com/static/image/speaker.png")
+        .icon_url("https://spoticord.com/speaker.png")
         .description(format!("Come listen along in <#{}>", channel_id))
         .footer("Spotify will automatically start playing on Spoticord")
         .status(Status::Info)

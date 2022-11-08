@@ -25,7 +25,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           &command,
           EmbedBuilder::new()
             .title("Cannot disconnect bot")
-            .icon_url("https://tabler-icons.io/static/tabler-icons/icons/ban.svg")
             .description("I'm currently not connected to any voice channel")
             .status(Status::Error)
             .build(),

@@ -7,6 +7,8 @@ pub enum IpcPacket {
   Connect(String, String),
   Disconnect,
 
+  ConnectError(String),
+
   StartPlayback,
   StopPlayback,
 
