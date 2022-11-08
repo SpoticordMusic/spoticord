@@ -18,7 +18,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       &command,
       EmbedBuilder::new()
         .title("Spoticord Help")
-        .icon_url("https://spoticord.com/img/logo-standard.webp")
+        .icon_url("https://spoticord.com/logo-standard.webp")
         .description(format!("**Welcome to Spoticord**
          It seems you have requested some help. Not to worry, we can help you out.\n
          **Not sure how the bot works?**
