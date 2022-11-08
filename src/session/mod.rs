@@ -199,6 +199,35 @@ impl SpoticordSession {
         trace!("Received IPC message: {:?}", msg);
 
         match msg {
+          // Session connect error
+          IpcPacket::ConnectError(why) => {
+            error!("Failed to connect to Spotify: {:?}", why);
+
+            // Notify the user in the text channel
+            if let Err(why) = ipc_instance
+              .text_channel_id
+              .send_message(&ipc_instance.http, |message| {
+                message.embed(|embed| {
+                  embed.title("Failed to connect to Spotify");
+                  embed.description(why);
+                  embed.color(Status::Error as u64);
+
+                  embed
+                });
+
+                message
+              })
+              .await
+            {
+              error!("Failed to send error message: {:?}", why);
+            }
+
+            // Clean up session
+            ipc_instance.player_stopped().await;
+
+            break;
+          }
+
           // Sink requests playback to start/resume
           IpcPacket::StartPlayback => {
             check_result(ipc_track.play());
@@ -217,6 +246,8 @@ impl SpoticordSession {
             let mut instance = ipc_instance.clone();
             let context = ipc_context.clone();
 
+            // TODO: Check if this is actually needed
+            // The new backend may have fixed the need for this
             tokio::spawn(async move {
               if let Err(why) = instance.update_track(&context, &owner_id, track_id).await {
                 error!("Failed to update track: {:?}", why);
@@ -274,7 +305,8 @@ impl SpoticordSession {
           }
 
           IpcPacket::Stopped => {
-            ipc_instance.player_stopped().await;
+            check_result(ipc_track.pause());
+            ipc_instance.start_disconnect_timer().await;
           }
 
           // Ignore other packets
@@ -441,6 +473,9 @@ impl SpoticordSession {
     // Clear playback info
     let mut playback_info = self.playback_info.write().await;
     *playback_info = None;
+
+    // Disconnect automatically after some time
+    self.start_disconnect_timer().await;
   }
 
   /// Internal version of disconnect, which does not abort the disconnect timer
