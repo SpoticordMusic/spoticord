@@ -112,6 +112,7 @@ async fn main() {
         _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
           let guild_count = cache.guilds().len();
           let active_count = session_manager.get_active_session_count().await;
+          let total_count = session_manager.get_session_count().await;
 
           if let Err(why) = stats_manager.set_server_count(guild_count) {
             error!("Failed to update server count: {}", why);
@@ -122,7 +123,15 @@ async fn main() {
           }
 
           // Yes, I like to handle my s's when I'm working with amounts
-          debug!("Updated stats: {} guild{}, {} active session{}", guild_count, if guild_count == 1 { "" } else { "s" }, active_count, if active_count == 1 { "" } else { "s" });
+          debug!(
+            "Updated stats: {} guild{}, {} active session{}, {} total session{}",
+            guild_count,
+            if guild_count == 1 { "" } else { "s" },
+            active_count,
+            if active_count == 1 { "" } else { "s" },
+            total_count,
+            if total_count == 1 { "" } else { "s" }
+          );
         }
 
         _ = tokio::signal::ctrl_c() => {

@@ -306,6 +306,8 @@ impl SpoticordSession {
 
           IpcPacket::Stopped => {
             check_result(ipc_track.pause());
+
+            ipc_instance.playback_info.write().await.take();
             ipc_instance.start_disconnect_timer().await;
           }
 

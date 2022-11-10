@@ -108,6 +108,13 @@ impl SessionManager {
     sessions.get(&guild_id).cloned()
   }
 
+  /// Get the amount of sessions
+  pub async fn get_session_count(&self) -> usize {
+    let sessions = self.sessions.read().await;
+
+    sessions.len()
+  }
+
   /// Get the amount of sessions with an owner
   pub async fn get_active_session_count(&self) -> usize {
     let sessions = self.sessions.read().await;
