@@ -583,32 +583,28 @@ impl SpoticordSession {
 
       // Ignore first (immediate) tick
       timer.tick().await;
+      timer.tick().await;
 
-      loop {
-        timer.tick().await;
+      // Make sure this task has not been aborted, if it has this will automatically stop execution.
+      tokio::task::yield_now().await;
 
-        // Make sure this task has not been aborted, if it has this will automatically stop execution.
-        tokio::task::yield_now().await;
+      let is_playing = {
+        let pbi = pbi.read().await;
 
-        let is_playing = {
-          let pbi = pbi.read().await;
-
-          if let Some(pbi) = &*pbi {
-            pbi.is_playing
-          } else {
-            false
-          }
-        };
-
-        if !is_playing {
-          info!("Player is not playing, disconnecting");
-          instance
-            .disconnect_with_message(
-              "The player has been inactive for too long, and has been disconnected.",
-            )
-            .await;
-          break;
+        if let Some(pbi) = &*pbi {
+          pbi.is_playing
+        } else {
+          false
         }
+      };
+
+      if !is_playing {
+        info!("Player is not playing, disconnecting");
+        instance
+          .disconnect_with_message(
+            "The player has been inactive for too long, and has been disconnected.",
+          )
+          .await;
       }
     }));
   }

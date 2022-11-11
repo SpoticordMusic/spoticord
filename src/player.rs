@@ -11,7 +11,7 @@ use librespot::{
     player::{Player, PlayerEvent},
   },
 };
-use log::{debug, error, warn};
+use log::{debug, error, trace, warn};
 use serde_json::json;
 
 use crate::{
@@ -56,10 +56,14 @@ impl SpoticordPlayer {
       session.shutdown();
     }
 
+    trace!("Creating Spotify session...");
+
     // Connect the session
     let (session, _) = match Session::connect(session_config, credentials, None, false).await {
       Ok((session, credentials)) => (session, credentials),
       Err(why) => {
+        error!("Failed to create Spotify session: {}", why);
+
         self
           .client
           .send(IpcPacket::ConnectError(why.to_string()))
@@ -102,9 +106,13 @@ impl SpoticordPlayer {
     let device_id = session.device_id().to_owned();
     let ipc = self.client.clone();
 
+    trace!("Successfully created Spotify session");
+
     // IPC Handler
     tokio::spawn(async move {
       let client = reqwest::Client::new();
+
+      let mut retries = 10;
 
       // Try to switch to the device
       loop {
@@ -121,10 +129,25 @@ impl SpoticordPlayer {
             if resp.status() == 202 {
               debug!("Successfully switched to device");
               break;
+            } else {
+              trace!("Device switch failed with status {}", resp.status());
+            }
+
+            retries -= 1;
+
+            if retries == 0 {
+              error!("Failed to switch to device");
+              ipc
+                .send(IpcPacket::ConnectError(
+                  "Switch to Spoticord device timed out".to_string(),
+                ))
+                .unwrap();
+              break;
             }
           }
           Err(why) => {
             error!("Failed to set device: {}", why);
+            ipc.send(IpcPacket::ConnectError(why.to_string())).unwrap();
             break;
           }
         }
