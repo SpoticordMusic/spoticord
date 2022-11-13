@@ -63,10 +63,6 @@ impl Client {
       .map_err(IpcError::Bincode)
   }
 
-  pub fn recv(&self) -> Result<IpcPacket, IpcError> {
-    self.rx.lock().unwrap().recv()
-  }
-
   pub fn try_recv(&self) -> Result<IpcPacket, TryRecvError> {
     self.rx.lock().unwrap().try_recv()
   }

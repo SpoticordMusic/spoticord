@@ -41,6 +41,91 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       }
     };
 
+    // Check for Voice Channel permissions
+    {
+      let channel = match ctx.cache.guild_channel(channel_id) {
+        Some(channel) => channel,
+        None => {
+          respond_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .description("The voice channel you are in is not available")
+              .status(Status::Error)
+              .build(),
+            true,
+          )
+          .await;
+
+          return;
+        }
+      };
+
+      if let Ok(permissions) =
+        channel.permissions_for_user(&ctx.cache, &ctx.cache.current_user_id())
+      {
+        if !permissions.view_channel() || !permissions.connect() || !permissions.speak() {
+          respond_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .description("I do not have the permissions to connect to that voice channel")
+              .status(Status::Error)
+              .build(),
+            true,
+          )
+          .await;
+
+          return;
+        }
+      }
+    }
+
+    // Check for Text Channel permissions
+    {
+      let channel = match ctx.cache.guild_channel(&command.channel_id) {
+        Some(channel) => channel,
+        None => {
+          respond_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .description("The text channel you are in is not available")
+              .status(Status::Error)
+              .build(),
+            true,
+          )
+          .await;
+
+          return;
+        }
+      };
+
+      if let Ok(permissions) =
+        channel.permissions_for_user(&ctx.cache, &ctx.cache.current_user_id())
+      {
+        if !permissions.view_channel() || !permissions.send_messages() || !permissions.embed_links()
+        {
+          respond_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .description("I do not have the permissions to speak in this text channel")
+              .status(Status::Error)
+              .build(),
+            true,
+          )
+          .await;
+
+          return;
+        }
+      }
+    }
+
     let data = ctx.data.read().await;
     let mut session_manager = data.get::<SessionManager>().unwrap().clone();
 

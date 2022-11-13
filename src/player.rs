@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use ipc_channel::ipc::{IpcError, TryRecvError};
 use librespot::{
   connect::spirc::Spirc,
   core::{
@@ -11,7 +14,7 @@ use librespot::{
     player::{Player, PlayerEvent},
   },
 };
-use log::{debug, error, trace, warn};
+use log::{debug, error, warn};
 use serde_json::json;
 
 use crate::{
@@ -55,8 +58,6 @@ impl SpoticordPlayer {
     if let Some(session) = self.session.take() {
       session.shutdown();
     }
-
-    trace!("Creating Spotify session...");
 
     // Connect the session
     let (session, _) = match Session::connect(session_config, credentials, None, false).await {
@@ -106,8 +107,6 @@ impl SpoticordPlayer {
     let device_id = session.device_id().to_owned();
     let ipc = self.client.clone();
 
-    trace!("Successfully created Spotify session");
-
     // IPC Handler
     tokio::spawn(async move {
       let client = reqwest::Client::new();
@@ -129,8 +128,6 @@ impl SpoticordPlayer {
             if resp.status() == 202 {
               debug!("Successfully switched to device");
               break;
-            } else {
-              trace!("Device switch failed with status {}", resp.status());
             }
 
             retries -= 1;
@@ -219,7 +216,7 @@ impl SpoticordPlayer {
     });
 
     self.spirc = Some(spirc);
-    session.spawn(spirc_task);
+    tokio::spawn(spirc_task);
   }
 
   pub fn stop(&mut self) {
@@ -242,9 +239,21 @@ pub async fn main() {
   let mut player = SpoticordPlayer::create(client.clone());
 
   loop {
-    let message = match client.recv() {
+    let message = match client.try_recv() {
       Ok(message) => message,
       Err(why) => {
+        if let TryRecvError::Empty = why {
+          // No message, wait a bit and try again
+          tokio::time::sleep(Duration::from_millis(25)).await;
+
+          continue;
+        } else if let TryRecvError::IpcError(why) = &why {
+          if let IpcError::Disconnected = why {
+            debug!("IPC connection closed, goodbye");
+            break;
+          }
+        }
+
         error!("Failed to receive message: {}", why);
         break;
       }

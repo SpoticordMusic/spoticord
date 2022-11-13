@@ -187,6 +187,7 @@ impl SpoticordSession {
               continue;
             } else if let TryRecvError::IpcError(why) = &why {
               if let IpcError::Disconnected = why {
+                trace!("IPC connection closed, exiting IPC handler");
                 break;
               }
             }
@@ -457,13 +458,23 @@ impl SpoticordSession {
 
   /// Called when the player must stop, but not leave the call
   async fn player_stopped(&mut self) {
-    if let Err(why) = self.track.pause() {
-      error!("Failed to pause track: {:?}", why);
-    }
-
     // Disconnect from Spotify
     if let Err(why) = self.client.send(IpcPacket::Disconnect) {
       error!("Failed to send disconnect packet: {:?}", why);
+    }
+
+    /* So this is really annoying, but necessary.
+     * If we pause songbird too quickly, the player would still have
+     *  some audio to write to stdout. Because songbird is paused,
+     *  the audio is never read, and the player process will hang.
+     *
+     * So yeah we just blatanly wait a second, and hope that's enough.
+     * Most likely causes issues when the system is a bit slow.
+     */
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    if let Err(why) = self.track.pause() {
+      error!("Failed to pause track: {:?}", why);
     }
 
     // Clear owner
