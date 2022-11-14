@@ -3,7 +3,7 @@
 use log::*;
 use serenity::{
   async_trait,
-  model::prelude::{interaction::Interaction, Activity, Ready},
+  model::prelude::{interaction::Interaction, Activity, GuildId, Ready},
   prelude::{Context, EventHandler},
 };
 
@@ -36,6 +36,18 @@ impl EventHandler for Handler {
   // INTERACTION_CREATE event, emitted when the bot receives an interaction (slash command, button, etc.)
   async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
     if let Interaction::ApplicationCommand(command) = interaction {
+      if let Ok(guild_id) = std::env::var("GUILD_ID") {
+        if let Ok(guild_id) = guild_id.parse::<u64>() {
+          let guild_id = GuildId(guild_id);
+
+          if let Some(interaction_guild_id) = command.guild_id {
+            if guild_id != interaction_guild_id {
+              return;
+            }
+          }
+        }
+      }
+
       // Commands must only be executed inside of guilds
 
       let guild_id = match command.guild_id {

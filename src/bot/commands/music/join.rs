@@ -1,7 +1,7 @@
-use log::trace;
+use log::{error, trace};
 use serenity::{
   builder::CreateApplicationCommand,
-  model::prelude::interaction::application_command::ApplicationCommandInteraction,
+  model::prelude::{interaction::application_command::ApplicationCommandInteraction, Channel},
   prelude::Context,
 };
 
@@ -43,15 +43,34 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
     // Check for Voice Channel permissions
     {
-      let channel = match ctx.cache.guild_channel(channel_id) {
-        Some(channel) => channel,
-        None => {
+      let channel = match channel_id.to_channel(&ctx).await {
+        Ok(channel) => match channel {
+          Channel::Guild(channel) => channel,
+          _ => {
+            respond_message(
+              &ctx,
+              &command,
+              EmbedBuilder::new()
+                .title("Cannot join voice channel")
+                .description("The voice channel you are in is not supported")
+                .status(Status::Error)
+                .build(),
+              true,
+            )
+            .await;
+
+            return;
+          }
+        },
+        Err(why) => {
+          error!("Failed to get channel: {}", why);
+
           respond_message(
             &ctx,
             &command,
             EmbedBuilder::new()
               .title("Cannot join voice channel")
-              .description("The voice channel you are in is not available")
+              .description("The voice channel you are in is not available.\nI might not the permission to see this channel.")
               .status(Status::Error)
               .build(),
             true,
@@ -85,15 +104,34 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
     // Check for Text Channel permissions
     {
-      let channel = match ctx.cache.guild_channel(&command.channel_id) {
-        Some(channel) => channel,
-        None => {
+      let channel = match command.channel_id.to_channel(&ctx).await {
+        Ok(channel) => match channel {
+          Channel::Guild(channel) => channel,
+          _ => {
+            respond_message(
+              &ctx,
+              &command,
+              EmbedBuilder::new()
+                .title("Cannot join voice channel")
+                .description("The text channel you are in is not supported")
+                .status(Status::Error)
+                .build(),
+              true,
+            )
+            .await;
+
+            return;
+          }
+        },
+        Err(why) => {
+          error!("Failed to get channel: {}", why);
+
           respond_message(
             &ctx,
             &command,
             EmbedBuilder::new()
               .title("Cannot join voice channel")
-              .description("The text channel you are in is not available")
+              .description("The text channel you are in is not available.\nI might not have the permission to see this channel.")
               .status(Status::Error)
               .build(),
             true,
@@ -114,7 +152,9 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
             &command,
             EmbedBuilder::new()
               .title("Cannot join voice channel")
-              .description("I do not have the permissions to speak in this text channel")
+              .description(
+                "I do not have the permissions to send messages / links in this text channel",
+              )
               .status(Status::Error)
               .build(),
             true,
