@@ -368,8 +368,10 @@ impl SpoticordSession {
             IpcPacket::Stopped => {
               check_result(track.pause());
 
-              let mut inner = inner.write().await;
-              inner.playback_info.take();
+              {
+                let mut inner = inner.write().await;
+                inner.playback_info.take();
+              }
 
               instance.start_disconnect_timer().await;
             }
