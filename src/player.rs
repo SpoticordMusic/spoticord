@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{process::exit, time::Duration};
 
 use ipc_channel::ipc::{IpcError, TryRecvError};
 use librespot::{
@@ -95,8 +95,8 @@ impl SpoticordPlayer {
     let (spirc, spirc_task) = Spirc::new(
       ConnectConfig {
         name: device_name.into(),
-        // 75%
-        initial_volume: Some((65535 / 4) * 3),
+        // 50%
+        initial_volume: Some(65535 / 2),
         ..ConnectConfig::default()
       },
       session.clone(),
@@ -275,8 +275,7 @@ pub async fn main() {
       IpcPacket::Quit => {
         debug!("Received quit packet, exiting");
 
-        player.stop();
-        break;
+        exit(0);
       }
 
       _ => {

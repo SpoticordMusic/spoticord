@@ -48,7 +48,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       }
     };
 
-    let owner = match session.get_owner().await {
+    let owner = match session.owner().await {
       Some(owner) => owner,
       None => {
         not_playing.await;
@@ -58,7 +58,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     };
 
     // Get Playback Info from session
-    let pbi = match session.get_playback_info().await {
+    let pbi = match session.playback_info().await {
       Some(pbi) => pbi,
       None => {
         not_playing.await;

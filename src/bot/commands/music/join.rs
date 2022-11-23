@@ -1,4 +1,4 @@
-use log::{error, trace};
+use log::error;
 use serenity::{
   builder::CreateApplicationCommand,
   model::prelude::{interaction::application_command::ApplicationCommandInteraction, Channel},
@@ -167,13 +167,13 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     }
 
     let data = ctx.data.read().await;
-    let mut session_manager = data.get::<SessionManager>().unwrap().clone();
+    let session_manager = data.get::<SessionManager>().unwrap().clone();
 
     // Check if another session is already active in this server
     let mut session_opt = session_manager.get_session(guild.id).await;
 
     if let Some(session) = &session_opt {
-      if let Some(owner) = session.get_owner().await {
+      if let Some(owner) = session.owner().await {
         let msg = if owner == command.user.id {
           "You are already controlling the bot"
         } else {
@@ -206,7 +206,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .description(
           format!(
             "You are already playing music in another server ({}).\nStop playing in that server first before joining this one.",
-            ctx.cache.guild(session.get_guild_id()).unwrap().name
+            ctx.cache.guild(session.guild_id().await).unwrap().name
           )).status(Status::Error).build(),
           true,
         )
@@ -218,8 +218,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     defer_message(&ctx, &command, false).await;
 
     if let Some(session) = &session_opt {
-      trace!("{} != {}", session.get_channel_id(), channel_id);
-      if session.get_channel_id() != channel_id {
+      if session.channel_id().await != channel_id {
         session.disconnect().await;
         session_opt = None;
 
@@ -228,7 +227,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       }
     }
 
-    if let Some(session) = &session_opt {
+    if let Some(session) = session_opt.as_mut() {
       if let Err(why) = session.update_owner(&ctx, command.user.id).await {
         // Need to link first
         if let SessionCreateError::NoSpotifyError = why {

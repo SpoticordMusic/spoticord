@@ -2,14 +2,22 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum IpcPacket {
+  /// Quit the player process
   Quit,
 
+  /// Connect to Spotify with the given token and device name
   Connect(String, String),
+
+  /// Disconnect from Spotify (unused)
   Disconnect,
 
+  /// Unable to connect to Spotify
   ConnectError(String),
 
+  /// The audio sink has started writing
   StartPlayback,
+
+  /// The audio sink has stopped writing
   StopPlayback,
 
   /// The current Spotify track was changed

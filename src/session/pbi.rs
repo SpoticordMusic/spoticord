@@ -30,7 +30,7 @@ impl PlaybackInfo {
   }
 
   /// Update position, duration and playback state
-  pub async fn update_pos_dur(&mut self, position_ms: u32, duration_ms: u32, is_playing: bool) {
+  pub fn update_pos_dur(&mut self, position_ms: u32, duration_ms: u32, is_playing: bool) {
     self.position_ms = position_ms;
     self.duration_ms = duration_ms;
     self.is_playing = is_playing;
