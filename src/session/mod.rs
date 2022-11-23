@@ -561,6 +561,7 @@ impl SpoticordSession {
 
     inner.disconnect_handle = Some(tokio::spawn({
       let inner = inner_arc.clone();
+      let instance = self.clone();
 
       async move {
         let mut timer = tokio::time::interval(Duration::from_secs(DISCONNECT_TIME));
@@ -572,10 +573,9 @@ impl SpoticordSession {
         // Make sure this task has not been aborted, if it has this will automatically stop execution.
         tokio::task::yield_now().await;
 
-        // Lock the inner mutex as late as possible to prevent any deadlocks
-        let mut inner = inner.write().await;
-
         let is_playing = {
+          let inner = inner.read().await;
+
           if let Some(ref pbi) = inner.playback_info {
             pbi.is_playing
           } else {
@@ -585,7 +585,7 @@ impl SpoticordSession {
 
         if !is_playing {
           info!("Player is not playing, disconnecting");
-          inner
+          instance
             .disconnect_with_message(
               "The player has been inactive for too long, and has been disconnected.",
             )
@@ -593,6 +593,40 @@ impl SpoticordSession {
         }
       }
     }));
+  }
+
+  pub async fn disconnect_with_message(&self, content: &str) {
+    {
+      let inner = self.0.read().await;
+
+      // Firstly we disconnect
+      inner.disconnect_no_abort().await;
+
+      // Then we send the message
+      if let Err(why) = inner
+        .text_channel_id
+        .send_message(&inner.http, |message| {
+          message.embed(|embed| {
+            embed.title("Disconnected from voice channel");
+            embed.description(content);
+            embed.color(Status::Warning as u64);
+
+            embed
+          })
+        })
+        .await
+      {
+        error!("Failed to send disconnect message: {:?}", why);
+      }
+    }
+
+    // Finally we stop and remove the disconnect timer
+    let mut inner = self.0.write().await;
+
+    // Stop the disconnect timer, if one is running
+    if let Some(handle) = inner.disconnect_handle.take() {
+      handle.abort();
+    }
   }
 
   /* Inner getters */
@@ -637,31 +671,6 @@ impl SpoticordSession {
 }
 
 impl InnerSpoticordSession {
-  pub async fn disconnect_with_message(&mut self, content: &str) {
-    self.disconnect_no_abort().await;
-
-    if let Err(why) = self
-      .text_channel_id
-      .send_message(&self.http, |message| {
-        message.embed(|embed| {
-          embed.title("Disconnected from voice channel");
-          embed.description(content);
-          embed.color(Status::Warning as u64);
-
-          embed
-        })
-      })
-      .await
-    {
-      error!("Failed to send disconnect message: {:?}", why);
-    }
-
-    // Stop the disconnect timer, if one is running
-    if let Some(handle) = self.disconnect_handle.take() {
-      handle.abort();
-    }
-  }
-
   /// Internal version of disconnect, which does not abort the disconnect timer
   async fn disconnect_no_abort(&self) {
     self.session_manager.remove_session(self.guild_id).await;
