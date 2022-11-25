@@ -16,6 +16,9 @@ pub enum SessionCreateError {
   #[error("The user has not linked their Spotify account")]
   NoSpotifyError,
 
+  #[error("The application no longer has access to the user's Spotify account")]
+  NoLongerSpotifyError,
+
   #[error("An error has occured while communicating with the database")]
   DatabaseError,
 

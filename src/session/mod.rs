@@ -153,6 +153,8 @@ impl SpoticordSession {
         if let DatabaseError::InvalidStatusCode(code) = why {
           if code == 404 {
             return Err(SessionCreateError::NoSpotifyError);
+          } else if code == 400 {
+            return Err(SessionCreateError::NoLongerSpotifyError);
           }
         }
 
