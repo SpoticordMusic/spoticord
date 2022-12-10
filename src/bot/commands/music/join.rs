@@ -243,6 +243,18 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .await;
 
           return;
+        } else if let SessionCreateError::NoLongerSpotifyError = why {
+          update_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .description("Spoticord no longer has access to your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to relink your Spotify account.")
+              .status(Status::Error)
+              .build(),
+          ).await;
+
+          return;
         }
 
         // Any other error
@@ -283,6 +295,18 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
               .build(),
           )
           .await;
+
+          return;
+        } else if let SessionCreateError::NoLongerSpotifyError = why {
+          update_message(
+            &ctx,
+            &command,
+            EmbedBuilder::new()
+              .title("Cannot join voice channel")
+              .description("Spoticord no longer has access to your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to relink your Spotify account.")
+              .status(Status::Error)
+              .build(),
+          ).await;
 
           return;
         }

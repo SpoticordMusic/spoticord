@@ -16,6 +16,9 @@ pub enum SessionCreateError {
   #[error("The user has not linked their Spotify account")]
   NoSpotifyError,
 
+  #[error("The application no longer has access to the user's Spotify account")]
+  NoLongerSpotifyError,
+
   #[error("An error has occured while communicating with the database")]
   DatabaseError,
 
@@ -66,11 +69,10 @@ impl InnerSessionManager {
   }
 
   /// Remove a session
-  pub async fn remove_session(&mut self, guild_id: GuildId) {
-    if let Some(session) = self.sessions.get(&guild_id) {
-      if let Some(owner) = session.owner().await {
-        self.owner_map.remove(&owner);
-      }
+  pub async fn remove_session(&mut self, guild_id: GuildId, owner: Option<UserId>) {
+    // Remove the owner from the owner map (if it exists)
+    if let Some(owner) = owner {
+      self.owner_map.remove(&owner);
     }
 
     self.sessions.remove(&guild_id);
@@ -146,8 +148,8 @@ impl SessionManager {
   }
 
   /// Remove a session
-  pub async fn remove_session(&self, guild_id: GuildId) {
-    self.0.write().await.remove_session(guild_id).await;
+  pub async fn remove_session(&self, guild_id: GuildId, owner: Option<UserId>) {
+    self.0.write().await.remove_session(guild_id, owner).await;
   }
 
   /// Remove owner from owner map.
