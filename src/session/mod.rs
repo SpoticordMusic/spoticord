@@ -54,6 +54,10 @@ struct InnerSpoticordSession {
   disconnect_handle: Option<tokio::task::JoinHandle<()>>,
 
   client: Option<Client>,
+
+  /// Whether the session has been disconnected
+  /// If this is true then this instance should no longer be used and dropped
+  disconnected: bool,
 }
 
 impl SpoticordSession {
@@ -90,6 +94,7 @@ impl SpoticordSession {
       playback_info: None,
       disconnect_handle: None,
       client: None,
+      disconnected: false,
     };
 
     let mut instance = Self(Arc::new(RwLock::new(inner)));
@@ -278,6 +283,7 @@ impl SpoticordSession {
                   message.embed(|embed| {
                     embed.title("Failed to connect to Spotify");
                     embed.description(why);
+                    embed.footer(|footer| footer.text("Please try again"));
                     embed.color(Status::Error as u64);
 
                     embed
@@ -289,9 +295,6 @@ impl SpoticordSession {
               {
                 error!("Failed to send error message: {:?}", why);
               }
-
-              // Clean up session
-              instance.player_stopped().await;
 
               break;
             }
@@ -381,6 +384,11 @@ impl SpoticordSession {
             // Ignore other packets
             _ => {}
           }
+        }
+
+        // Clean up session
+        if !inner.read().await.disconnected {
+          instance.player_stopped().await;
         }
       }
     });
@@ -515,7 +523,7 @@ impl SpoticordSession {
     //  read lock to read the current owner.
     // This would deadlock if we have an active write lock
     {
-      let inner = self.0.read().await;
+      let mut inner = self.0.write().await;
       inner.disconnect_no_abort().await;
     }
 
@@ -599,7 +607,7 @@ impl SpoticordSession {
 
   pub async fn disconnect_with_message(&self, content: &str) {
     {
-      let inner = self.0.read().await;
+      let mut inner = self.0.write().await;
 
       // Firstly we disconnect
       inner.disconnect_no_abort().await;
@@ -674,8 +682,12 @@ impl SpoticordSession {
 
 impl InnerSpoticordSession {
   /// Internal version of disconnect, which does not abort the disconnect timer
-  async fn disconnect_no_abort(&self) {
-    self.session_manager.remove_session(self.guild_id).await;
+  async fn disconnect_no_abort(&mut self) {
+    self.disconnected = true;
+    self
+      .session_manager
+      .remove_session(self.guild_id, self.owner)
+      .await;
 
     let mut call = self.call.lock().await;
 

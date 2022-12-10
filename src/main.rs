@@ -25,7 +25,7 @@ mod session;
 mod stats;
 mod utils;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
   if std::env::var("RUST_LOG").is_err() {
     #[cfg(debug_assertions)]
