@@ -1,4 +1,3 @@
-use chrono::Datelike;
 use dotenv::dotenv;
 
 use log::*;
@@ -58,7 +57,7 @@ async fn main() {
   }
 
   info!("It's a good day");
-  info!(" - Spoticord {}", chrono::Utc::now().year());
+  info!(" - Spoticord {}", time::OffsetDateTime::now_utc().year());
 
   let result = dotenv();
 
