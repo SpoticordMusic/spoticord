@@ -268,8 +268,6 @@ impl SpoticordSession {
             }
           };
 
-          trace!("Received IPC message: {:?}", msg);
-
           match msg {
             // Session connect error
             IpcPacket::ConnectError(why) => {
@@ -564,6 +562,11 @@ impl SpoticordSession {
     let inner_arc = self.0.clone();
     let mut inner = inner_arc.write().await;
 
+    // Check if we are already disconnected
+    if inner.disconnected {
+      return;
+    }
+
     // Abort the previous timer, if one is running
     if let Some(handle) = inner.disconnect_handle.take() {
       handle.abort();
@@ -691,8 +694,18 @@ impl InnerSpoticordSession {
 
     let mut call = self.call.lock().await;
 
-    if let Some(ref track) = self.track {
-      track.stop().unwrap_or(());
+    if let Some(client) = self.client.take() {
+      // Ask player to quit (will cause defunct process)
+      if let Err(why) = client.send(IpcPacket::Quit) {
+        error!("Failed to send quit packet: {:?}", why);
+      }
+    }
+
+    if let Some(track) = self.track.take() {
+      // Stop the playback, and freeing the child handle, removing the defunct process
+      if let Err(why) = track.stop() {
+        error!("Failed to stop track: {:?}", why);
+      }
     }
 
     call.remove_all_global_events();
