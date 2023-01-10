@@ -35,4 +35,4 @@ For information about how to contribute to Spoticord, check out [CONTRIBUTING.md
 If you have any questions, feel free to join the [Spoticord Discord server](https://discord.gg/wRCyhVqBZ5)!
 
 # License
-Spoticord is licensed under the [Apache License 2.0](LICENSE).
+Spoticord is licensed under the [GNU General Public License v3.0](LICENSE).
