@@ -15,7 +15,10 @@ pub const NAME: &str = "join";
 
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
-    let guild = ctx.cache.guild(command.guild_id.unwrap()).unwrap();
+    let guild = ctx
+      .cache
+      .guild(command.guild_id.expect("to contain a value"))
+      .expect("to be present");
 
     // Get the voice channel id of the calling user
     let channel_id = match guild
@@ -81,8 +84,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         }
       };
 
-      if let Ok(permissions) =
-        channel.permissions_for_user(&ctx.cache, &ctx.cache.current_user_id())
+      if let Ok(permissions) = channel.permissions_for_user(&ctx.cache, ctx.cache.current_user_id())
       {
         if !permissions.view_channel() || !permissions.connect() || !permissions.speak() {
           respond_message(
@@ -142,8 +144,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         }
       };
 
-      if let Ok(permissions) =
-        channel.permissions_for_user(&ctx.cache, &ctx.cache.current_user_id())
+      if let Ok(permissions) = channel.permissions_for_user(&ctx.cache, ctx.cache.current_user_id())
       {
         if !permissions.view_channel() || !permissions.send_messages() || !permissions.embed_links()
         {
@@ -167,7 +168,10 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     }
 
     let data = ctx.data.read().await;
-    let session_manager = data.get::<SessionManager>().unwrap().clone();
+    let session_manager = data
+      .get::<SessionManager>()
+      .expect("to contain a value")
+      .clone();
 
     // Check if another session is already active in this server
     let mut session_opt = session_manager.get_session(guild.id).await;
@@ -206,7 +210,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .description(
           format!(
             "You are already playing music in another server ({}).\nStop playing in that server first before joining this one.",
-            ctx.cache.guild(session.guild_id().await).unwrap().name
+            ctx.cache.guild(session.guild_id().await).expect("to be present").name
           )).status(Status::Error).build(),
           true,
         )
@@ -230,7 +234,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     if let Some(session) = session_opt.as_mut() {
       if let Err(why) = session.update_owner(&ctx, command.user.id).await {
         // Need to link first
-        if let SessionCreateError::NoSpotifyError = why {
+        if let SessionCreateError::NoSpotify = why {
           update_message(
             &ctx,
             &command,
@@ -243,7 +247,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .await;
 
           return;
-        } else if let SessionCreateError::NoLongerSpotifyError = why {
+        } else if let SessionCreateError::SpotifyExpired = why {
           update_message(
             &ctx,
             &command,
@@ -284,7 +288,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
         .await
       {
         // Need to link first
-        if let SessionCreateError::NoSpotifyError = why {
+        if let SessionCreateError::NoSpotify = why {
           update_message(
             &ctx,
             &command,
@@ -297,7 +301,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .await;
 
           return;
-        } else if let SessionCreateError::NoLongerSpotifyError = why {
+        } else if let SessionCreateError::SpotifyExpired = why {
           update_message(
             &ctx,
             &command,

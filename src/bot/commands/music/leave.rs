@@ -15,9 +15,15 @@ pub const NAME: &str = "leave";
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let data = ctx.data.read().await;
-    let session_manager = data.get::<SessionManager>().unwrap().clone();
+    let session_manager = data
+      .get::<SessionManager>()
+      .expect("to contain a value")
+      .clone();
 
-    let session = match session_manager.get_session(command.guild_id.unwrap()).await {
+    let session = match session_manager
+      .get_session(command.guild_id.expect("to contain a value"))
+      .await
+    {
       Some(session) => session,
       None => {
         respond_message(

@@ -17,8 +17,8 @@ pub const NAME: &str = "unlink";
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let data = ctx.data.read().await;
-    let database = data.get::<Database>().unwrap();
-    let session_manager = data.get::<SessionManager>().unwrap();
+    let database = data.get::<Database>().expect("to contain a value");
+    let session_manager = data.get::<SessionManager>().expect("to contain a value");
 
     // Disconnect session if user has any
     if let Some(session) = session_manager.find(command.user.id).await {

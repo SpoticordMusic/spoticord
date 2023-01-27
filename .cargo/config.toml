@@ -1,2 +1,5 @@
 [target.x86_64-pc-windows-gnu]
 rustflags = "-C link-args=-lssp" # Does not compile without this line
+
+[build]
+rustflags = ["--cfg", "tokio_unstable"]

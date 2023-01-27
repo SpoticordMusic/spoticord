@@ -66,10 +66,8 @@ impl PlaybackInfo {
   pub fn get_name(&self) -> Option<String> {
     if let Some(track) = &self.track {
       Some(track.name.clone())
-    } else if let Some(episode) = &self.episode {
-      Some(episode.name.clone())
     } else {
-      None
+      self.episode.as_ref().map(|episode| episode.name.clone())
     }
   }
 
@@ -84,10 +82,11 @@ impl PlaybackInfo {
           .collect::<Vec<String>>()
           .join(", "),
       )
-    } else if let Some(episode) = &self.episode {
-      Some(episode.show.name.clone())
     } else {
-      None
+      self
+        .episode
+        .as_ref()
+        .map(|episode| episode.show.name.clone())
     }
   }
 
@@ -97,12 +96,12 @@ impl PlaybackInfo {
       let mut images = track.album.images.clone();
       images.sort_by(|a, b| b.width.cmp(&a.width));
 
-      Some(images.get(0).unwrap().url.clone())
+      images.get(0).as_ref().map(|image| image.url.clone())
     } else if let Some(episode) = &self.episode {
       let mut images = episode.show.images.clone();
       images.sort_by(|a, b| b.width.cmp(&a.width));
 
-      Some(images.get(0).unwrap().url.clone())
+      images.get(0).as_ref().map(|image| image.url.clone())
     } else {
       None
     }

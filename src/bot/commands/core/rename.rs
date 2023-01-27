@@ -22,7 +22,7 @@ pub const NAME: &str = "rename";
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let data = ctx.data.read().await;
-    let database = data.get::<Database>().unwrap();
+    let database = data.get::<Database>().expect("to contain a value");
 
     // Check if user exists, if not, create them
     if let Err(why) = database.get_user(command.user.id.to_string()).await {
@@ -65,7 +65,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
     let device_name = match command.data.options.get(0) {
       Some(option) => match option.value {
-        Some(ref value) => value.as_str().unwrap().to_string(),
+        Some(ref value) => value.as_str().expect("to be a string").to_string(),
         None => {
           respond_message(
             &ctx,

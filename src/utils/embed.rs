@@ -65,10 +65,10 @@ impl EmbedBuilder {
   }
 }
 
-pub fn make_embed_message<'a>(
-  embed: &'a mut CreateEmbed,
+pub fn make_embed_message(
+  embed: &'_ mut CreateEmbed,
   options: EmbedMessageOptions,
-) -> &'a mut CreateEmbed {
+) -> &'_ mut CreateEmbed {
   let status = options.status.unwrap_or(Status::None);
 
   embed.author(|author| {

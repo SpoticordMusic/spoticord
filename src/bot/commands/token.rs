@@ -15,7 +15,7 @@ pub const NAME: &str = "token";
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let data = ctx.data.read().await;
-    let db = data.get::<Database>().unwrap();
+    let db = data.get::<Database>().expect("to contain a value");
 
     let token = db.get_access_token(command.user.id.to_string()).await;
 
@@ -31,7 +31,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .interaction_response_data(|message| message.content(content).ephemeral(true))
       })
       .await
-      .unwrap();
+      .ok();
   })
 }
 

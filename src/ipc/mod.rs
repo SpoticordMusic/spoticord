@@ -58,12 +58,12 @@ impl Client {
     self
       .tx
       .lock()
-      .unwrap()
+      .expect("to be able to lock")
       .send(packet)
       .map_err(IpcError::Bincode)
   }
 
   pub fn try_recv(&self) -> Result<IpcPacket, TryRecvError> {
-    self.rx.lock().unwrap().try_recv()
+    self.rx.lock().expect("to be able to lock").try_recv()
   }
 }

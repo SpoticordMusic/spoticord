@@ -70,10 +70,13 @@ impl SpoticordSession {
   ) -> Result<SpoticordSession, SessionCreateError> {
     // Get the Spotify token of the owner
     let data = ctx.data.read().await;
-    let session_manager = data.get::<SessionManager>().unwrap().clone();
+    let session_manager = data
+      .get::<SessionManager>()
+      .expect("to contain a value")
+      .clone();
 
     // Join the voice channel
-    let songbird = songbird::get(ctx).await.unwrap().clone();
+    let songbird = songbird::get(ctx).await.expect("to be present").clone();
 
     let (call, result) = songbird.join(guild_id, channel_id).await;
 
@@ -83,7 +86,7 @@ impl SpoticordSession {
     }
 
     let inner = InnerSpoticordSession {
-      owner: Some(owner_id.clone()),
+      owner: Some(owner_id),
       guild_id,
       channel_id,
       text_channel_id,
@@ -124,7 +127,10 @@ impl SpoticordSession {
   ) -> Result<(), SessionCreateError> {
     // Get the Spotify token of the owner
     let data = ctx.data.read().await;
-    let session_manager = data.get::<SessionManager>().unwrap().clone();
+    let session_manager = data
+      .get::<SessionManager>()
+      .expect("to contain a value")
+      .clone();
 
     {
       let mut inner = self.0.write().await;
@@ -144,22 +150,22 @@ impl SpoticordSession {
   }
 
   async fn create_player(&mut self, ctx: &Context) -> Result<(), SessionCreateError> {
-    let owner_id = match self.owner().await.clone() {
+    let owner_id = match self.owner().await {
       Some(owner_id) => owner_id,
-      None => return Err(SessionCreateError::NoOwnerError),
+      None => return Err(SessionCreateError::NoOwner),
     };
 
     let data = ctx.data.read().await;
-    let database = data.get::<Database>().unwrap();
+    let database = data.get::<Database>().expect("to contain a value");
 
     let token = match database.get_access_token(owner_id.to_string()).await {
       Ok(token) => token,
       Err(why) => {
         if let DatabaseError::InvalidStatusCode(code) = why {
           if code == 404 {
-            return Err(SessionCreateError::NoSpotifyError);
+            return Err(SessionCreateError::NoSpotify);
           } else if code == 400 {
-            return Err(SessionCreateError::NoLongerSpotifyError);
+            return Err(SessionCreateError::SpotifyExpired);
           }
         }
 
@@ -185,24 +191,25 @@ impl SpoticordSession {
     };
 
     // Spawn player process
-    let child = match Command::new(std::env::current_exe().unwrap())
-      .args([
-        "--player",
-        &tx_name,
-        &rx_name,
-        "--debug-guild-id",
-        &self.guild_id().await.to_string(),
-      ])
-      .stdout(Stdio::piped())
-      .stderr(Stdio::inherit())
-      .spawn()
-    {
-      Ok(child) => child,
-      Err(why) => {
-        error!("Failed to start player process: {:?}", why);
-        return Err(SessionCreateError::ForkError);
-      }
-    };
+    let child =
+      match Command::new(std::env::current_exe().expect("to know the current executable path"))
+        .args([
+          "--player",
+          &tx_name,
+          &rx_name,
+          "--debug-guild-id",
+          &self.guild_id().await.to_string(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+      {
+        Ok(child) => child,
+        Err(why) => {
+          error!("Failed to start player process: {:?}", why);
+          return Err(SessionCreateError::ForkError);
+        }
+      };
 
     // Establish bi-directional IPC channel
     let client = match server.accept() {
@@ -256,11 +263,9 @@ impl SpoticordSession {
                 tokio::time::sleep(Duration::from_millis(25)).await;
 
                 continue;
-              } else if let TryRecvError::IpcError(why) = &why {
-                if let IpcError::Disconnected = why {
-                  trace!("IPC connection closed, exiting IPC handler");
-                  break;
-                }
+              } else if let TryRecvError::IpcError(IpcError::Disconnected) = &why {
+                trace!("IPC connection closed, exiting IPC handler");
+                break;
               }
 
               error!("Failed to receive IPC message: {:?}", why);
@@ -310,7 +315,7 @@ impl SpoticordSession {
             // A new track has been set by the player
             IpcPacket::TrackChange(track) => {
               // Convert to SpotifyId
-              let track_id = SpotifyId::from_uri(&track).unwrap();
+              let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
 
               let instance = instance.clone();
               let ctx = ctx.clone();
@@ -329,7 +334,7 @@ impl SpoticordSession {
             // The player has started playing a track
             IpcPacket::Playing(track, position_ms, duration_ms) => {
               // Convert to SpotifyId
-              let track_id = SpotifyId::from_uri(&track).unwrap();
+              let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
 
               let was_none = instance
                 .update_playback(duration_ms, position_ms, true)
@@ -350,7 +355,7 @@ impl SpoticordSession {
               instance.start_disconnect_timer().await;
 
               // Convert to SpotifyId
-              let track_id = SpotifyId::from_uri(&track).unwrap();
+              let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
 
               let was_none = instance
                 .update_playback(duration_ms, position_ms, false)
@@ -415,7 +420,7 @@ impl SpoticordSession {
       let pbi = self.playback_info().await;
 
       if let Some(pbi) = pbi {
-        pbi.spotify_id.is_none() || pbi.spotify_id.unwrap() != spotify_id
+        pbi.spotify_id.is_none() || pbi.spotify_id != Some(spotify_id)
       } else {
         false
       }
@@ -426,7 +431,7 @@ impl SpoticordSession {
     }
 
     let data = ctx.data.read().await;
-    let database = data.get::<Database>().unwrap();
+    let database = data.get::<Database>().expect("to contain a value");
 
     let token = match database.get_access_token(&owner_id.to_string()).await {
       Ok(token) => token,
@@ -549,7 +554,7 @@ impl SpoticordSession {
       inner
         .playback_info
         .as_mut()
-        .unwrap()
+        .expect("to contain a value")
         .update_pos_dur(position_ms, duration_ms, playing);
     };
 

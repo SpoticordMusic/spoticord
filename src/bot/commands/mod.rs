@@ -170,7 +170,7 @@ impl CommandManager {
       cmds: &HashMap<String, CommandInfo>,
       mut commands: &'a mut CreateApplicationCommands,
     ) -> &'a mut CreateApplicationCommands {
-      for (_, command_info) in cmds {
+      for command_info in cmds.values() {
         commands = commands.create_application_command(|command| (command_info.register)(command));
       }
 

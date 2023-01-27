@@ -23,15 +23,15 @@ pub fn time_to_str(time: u32) -> String {
   let min = 60;
 
   if time / hour >= 1 {
-    return format!(
+    format!(
       "{}h{}m{}s",
       time / hour,
       (time % hour) / min,
       (time % hour) % min
-    );
+    )
   } else if time / min >= 1 {
-    return format!("{}m{}s", time / min, time % min);
+    format!("{}m{}s", time / min, time % min)
   } else {
-    return format!("{}s", time);
+    format!("{}s", time)
   }
 }

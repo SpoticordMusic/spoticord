@@ -42,9 +42,7 @@ impl Sink for StdoutSink {
     self
       .output
       .take()
-      .ok_or(SinkError::NotConnected(
-        "StdoutSink is not connected".to_string(),
-      ))?
+      .ok_or_else(|| SinkError::NotConnected("StdoutSink is not connected".to_string()))?
       .flush()
       .map_err(|why| SinkError::OnWrite(why.to_string()))?;
 
@@ -62,9 +60,9 @@ impl Sink for StdoutSink {
         48000,
         2,
         samplerate::ConverterType::Linear,
-        &samples_f32,
+        samples_f32,
       )
-      .unwrap();
+      .expect("to succeed");
 
       let samples_i16 =
         &converter.f64_to_s16(&resampled.iter().map(|v| *v as f64).collect::<Vec<f64>>());
@@ -81,9 +79,7 @@ impl SinkAsBytes for StdoutSink {
     self
       .output
       .as_deref_mut()
-      .ok_or(SinkError::NotConnected(
-        "StdoutSink is not connected".to_string(),
-      ))?
+      .ok_or_else(|| SinkError::NotConnected("StdoutSink is not connected".to_string()))?
       .write_all(data)
       .map_err(|why| SinkError::OnWrite(why.to_string()))?;
 

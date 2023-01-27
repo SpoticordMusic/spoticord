@@ -17,9 +17,13 @@ pub const NAME: &str = "link";
 pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let data = ctx.data.read().await;
-    let database = data.get::<Database>().unwrap();
+    let database = data.get::<Database>().expect("to contain a value");
 
-    if let Ok(_) = database.get_user_account(command.user.id.to_string()).await {
+    if database
+      .get_user_account(command.user.id.to_string())
+      .await
+      .is_ok()
+    {
       respond_message(
         &ctx,
         &command,
@@ -35,7 +39,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     }
 
     if let Ok(request) = database.get_user_request(command.user.id.to_string()).await {
-      let base = std::env::var("SPOTICORD_ACCOUNTS_URL").unwrap();
+      let base = std::env::var("SPOTICORD_ACCOUNTS_URL").expect("to be present");
       let link = format!("{}/spotify/{}", base, request.token);
 
       respond_message(
@@ -102,7 +106,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
       .await
     {
       Ok(request) => {
-        let base = std::env::var("SPOTICORD_ACCOUNTS_URL").unwrap();
+        let base = std::env::var("SPOTICORD_ACCOUNTS_URL").expect("to be present");
         let link = format!("{}/spotify/{}", base, request.token);
 
         respond_message(
@@ -121,9 +125,8 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           true,
         )
         .await;
-
-        return;
       }
+
       Err(why) => {
         error!("Error creating user request: {:?}", why);
 
@@ -137,8 +140,6 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           true,
         )
         .await;
-
-        return;
       }
     };
   })

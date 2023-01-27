@@ -11,13 +11,13 @@ use super::SpoticordSession;
 #[derive(Debug, Error)]
 pub enum SessionCreateError {
   #[error("This session has no owner assigned")]
-  NoOwnerError,
+  NoOwner,
 
   #[error("The user has not linked their Spotify account")]
-  NoSpotifyError,
+  NoSpotify,
 
   #[error("The application no longer has access to the user's Spotify account")]
-  NoLongerSpotifyError,
+  SpotifyExpired,
 
   #[error("An error has occured while communicating with the database")]
   DatabaseError,
@@ -99,7 +99,7 @@ impl InnerSessionManager {
   pub fn find(&self, owner_id: UserId) -> Option<SpoticordSession> {
     let guild_id = self.owner_map.get(&owner_id)?;
 
-    self.sessions.get(&guild_id).cloned()
+    self.sessions.get(guild_id).cloned()
   }
 
   /// Get the amount of sessions

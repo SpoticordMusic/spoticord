@@ -320,7 +320,7 @@ impl Database {
   ) -> Result<(), DatabaseError> {
     let device_name: String = name.into();
 
-    if device_name.len() > 16 || device_name.len() < 1 {
+    if device_name.len() > 16 || device_name.is_empty() {
       return Err(DatabaseError::InvalidInputBody(
         "Invalid device name length".into(),
       ));
@@ -345,7 +345,7 @@ impl Database {
       StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED | StatusCode::NO_CONTENT => {
         Ok(())
       }
-      status => return Err(DatabaseError::InvalidStatusCode(status)),
+      status => Err(DatabaseError::InvalidStatusCode(status)),
     }
   }
 }

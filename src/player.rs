@@ -43,7 +43,9 @@ impl SpoticordPlayer {
     let token = token.into();
 
     // Get the username (required for librespot)
-    let username = utils::spotify::get_username(&token).await.unwrap();
+    let username = utils::spotify::get_username(&token)
+      .await
+      .expect("to get the username");
 
     let session_config = SessionConfig::default();
     let player_config = PlayerConfig {
@@ -68,7 +70,7 @@ impl SpoticordPlayer {
         self
           .client
           .send(IpcPacket::ConnectError(why.to_string()))
-          .unwrap();
+          .ok();
         return;
       }
     };
@@ -77,7 +79,7 @@ impl SpoticordPlayer {
     self.session = Some(session.clone());
 
     // Volume mixer
-    let mixer = (mixer::find(Some("softvol")).unwrap())(MixerConfig {
+    let mixer = (mixer::find(Some("softvol")).expect("to exist"))(MixerConfig {
       volume_ctrl: librespot::playback::config::VolumeCtrl::Linear,
       ..MixerConfig::default()
     });
@@ -138,13 +140,13 @@ impl SpoticordPlayer {
                 .send(IpcPacket::ConnectError(
                   "Switch to Spoticord device timed out".to_string(),
                 ))
-                .unwrap();
+                .ok();
               break;
             }
           }
           Err(why) => {
             error!("Failed to set device: {}", why);
-            ipc.send(IpcPacket::ConnectError(why.to_string())).unwrap();
+            ipc.send(IpcPacket::ConnectError(why.to_string())).ok();
             break;
           }
         }
@@ -167,7 +169,7 @@ impl SpoticordPlayer {
             duration_ms,
           } => {
             if let Err(why) = ipc.send(IpcPacket::Playing(
-              track_id.to_uri().unwrap(),
+              track_id.to_uri().expect("to not fail"),
               position_ms,
               duration_ms,
             )) {
@@ -182,7 +184,7 @@ impl SpoticordPlayer {
             duration_ms,
           } => {
             if let Err(why) = ipc.send(IpcPacket::Paused(
-              track_id.to_uri().unwrap(),
+              track_id.to_uri().expect("to not fail"),
               position_ms,
               duration_ms,
             )) {
@@ -194,7 +196,9 @@ impl SpoticordPlayer {
             old_track_id: _,
             new_track_id,
           } => {
-            if let Err(why) = ipc.send(IpcPacket::TrackChange(new_track_id.to_uri().unwrap())) {
+            if let Err(why) = ipc.send(IpcPacket::TrackChange(
+              new_track_id.to_uri().expect("to not fail"),
+            )) {
               error!("Failed to send track change packet: {}", why);
             }
           }
@@ -247,11 +251,9 @@ pub async fn main() {
           tokio::time::sleep(Duration::from_millis(25)).await;
 
           continue;
-        } else if let TryRecvError::IpcError(why) = &why {
-          if let IpcError::Disconnected = why {
-            debug!("IPC connection closed, goodbye");
-            break;
-          }
+        } else if let TryRecvError::IpcError(IpcError::Disconnected) = &why {
+          debug!("IPC connection closed, goodbye");
+          break;
         }
 
         error!("Failed to receive message: {}", why);

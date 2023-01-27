@@ -19,7 +19,7 @@ impl EventHandler for Handler {
   // READY event, emitted when the bot/shard starts up
   async fn ready(&self, ctx: Context, ready: Ready) {
     let data = ctx.data.read().await;
-    let command_manager = data.get::<CommandManager>().unwrap();
+    let command_manager = data.get::<CommandManager>().expect("to contain a value");
 
     debug!("Ready received, logged in as {}", ready.user.name);
 
@@ -78,7 +78,7 @@ impl EventHandler for Handler {
       );
 
       let data = ctx.data.read().await;
-      let command_manager = data.get::<CommandManager>().unwrap();
+      let command_manager = data.get::<CommandManager>().expect("to contain a value");
 
       command_manager.execute_command(&ctx, command).await;
     }

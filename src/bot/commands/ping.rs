@@ -22,7 +22,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
           .interaction_response_data(|message| message.content("Pong!"))
       })
       .await
-      .unwrap();
+      .ok();
   })
 }
 

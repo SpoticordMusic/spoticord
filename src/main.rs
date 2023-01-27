@@ -26,6 +26,8 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
+  console_subscriber::init();
+
   if std::env::var("RUST_LOG").is_err() {
     #[cfg(debug_assertions)]
     {
@@ -42,18 +44,16 @@ async fn main() {
 
   let args: Vec<String> = env::args().collect();
 
-  if args.len() > 2 {
-    if &args[1] == "--player" {
-      // Woah! We're running in player mode!
+  if args.len() > 2 && &args[1] == "--player" {
+    // Woah! We're running in player mode!
 
-      debug!("Starting Spoticord player");
+    debug!("Starting Spoticord player");
 
-      player::main().await;
+    player::main().await;
 
-      debug!("Player exited, shutting down");
+    debug!("Player exited, shutting down");
 
-      return;
-    }
+    return;
   }
 
   info!("It's a good day");
@@ -62,7 +62,10 @@ async fn main() {
   let result = dotenv();
 
   if let Ok(path) = result {
-    debug!("Loaded environment file: {}", path.to_str().unwrap());
+    debug!(
+      "Loaded environment file: {}",
+      path.to_str().expect("to get the string")
+    );
   } else {
     warn!("No .env file found, expecting all necessary environment variables");
   }
@@ -83,7 +86,7 @@ async fn main() {
   .framework(StandardFramework::new())
   .register_songbird()
   .await
-  .unwrap();
+  .expect("to create a client");
 
   {
     let mut data = client.data.write().await;
@@ -98,7 +101,8 @@ async fn main() {
 
   #[cfg(unix)]
   let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
-    tokio::signal::unix::signal(SignalKind::terminate()).unwrap(),
+    tokio::signal::unix::signal(SignalKind::terminate())
+      .expect("to be able to create the signal stream"),
   ));
 
   #[cfg(not(unix))]
@@ -145,7 +149,7 @@ async fn main() {
           #[cfg(unix)]
           match term {
             Some(ref mut term) => {
-              let term = term.downcast_mut::<tokio::signal::unix::Signal>().unwrap();
+              let term = term.downcast_mut::<tokio::signal::unix::Signal>().expect("to be able to downcast");
 
               term.recv().await
             }

@@ -37,9 +37,15 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     };
 
     let data = ctx.data.read().await;
-    let session_manager = data.get::<SessionManager>().unwrap().clone();
+    let session_manager = data
+      .get::<SessionManager>()
+      .expect("to contain a value")
+      .clone();
 
-    let session = match session_manager.get_session(command.guild_id.unwrap()).await {
+    let session = match session_manager
+      .get_session(command.guild_id.expect("to contain a value"))
+      .await
+    {
       Some(session) => session,
       None => {
         not_playing.await;
@@ -86,8 +92,8 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     // Create title
     let title = format!(
       "{} - {}",
-      pbi.get_artists().unwrap(),
-      pbi.get_name().unwrap()
+      pbi.get_artists().expect("to contain a value"),
+      pbi.get_name().expect("to contain a value")
     );
 
     // Create description
@@ -100,9 +106,9 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
 
     for i in 0..20 {
       if i == spot {
-        description.push_str("🔵");
+        description.push('🔵');
       } else {
-        description.push_str("▬");
+        description.push('▬');
       }
     }
 
@@ -141,7 +147,7 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
     };
 
     // Get the thumbnail image
-    let thumbnail = pbi.get_thumbnail_url().unwrap();
+    let thumbnail = pbi.get_thumbnail_url().expect("to contain a value");
 
     if let Err(why) = command
       .create_interaction_response(&ctx.http, |response| {
@@ -159,7 +165,9 @@ pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutpu
                 .url(format!(
                   "https://open.spotify.com/{}/{}",
                   audio_type,
-                  spotify_id.to_base62().unwrap()
+                  spotify_id
+                    .to_base62()
+                    .expect("to be able to convert to base62")
                 ))
                 .description(description)
                 .footer(|footer| footer.text(&owner.name).icon_url(owner.face()))

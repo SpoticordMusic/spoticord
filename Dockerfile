@@ -20,4 +20,6 @@ RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/
 # Copy spoticord binary from builder
 COPY --from=builder /usr/local/cargo/bin/spoticord ./spoticord
 
+ENV TOKIO_CONSOLE_BIND=0.0.0.0:4567
+
 CMD ["./spoticord"]

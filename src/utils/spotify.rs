@@ -69,13 +69,10 @@ pub async fn get_username(token: impl Into<String>) -> Result<String, String> {
 
     if response.status() != 200 {
       error!("Failed to get username: {}", response.status());
-      return Err(
-        format!(
-          "Failed to get track info: Invalid status code: {}",
-          response.status()
-        )
-        .into(),
-      );
+      return Err(format!(
+        "Failed to get track info: Invalid status code: {}",
+        response.status()
+      ));
     }
 
     let body: Value = match response.json().await {
