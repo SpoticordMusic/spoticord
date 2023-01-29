@@ -9,7 +9,6 @@ name = "spoticord"
 path = "src/main.rs"
 
 [dependencies]
-console-subscriber = "0.1.8"
 dotenv = "0.15.0"
 env_logger = "0.9.3"
 ipc-channel = { version = "0.16.0", features = ["async"] }

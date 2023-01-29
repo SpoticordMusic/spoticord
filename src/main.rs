@@ -26,8 +26,6 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
-  console_subscriber::init();
-
   if std::env::var("RUST_LOG").is_err() {
     #[cfg(debug_assertions)]
     {
