@@ -52,16 +52,10 @@ impl InnerSessionManager {
   /// Creates a new session for the given user in the given guild.
   pub async fn create_session(
     &mut self,
-    ctx: &Context,
+    session: SpoticordSession,
     guild_id: GuildId,
-    channel_id: ChannelId,
-    text_channel_id: ChannelId,
     owner_id: UserId,
   ) -> Result<(), SessionCreateError> {
-    // Create session first to make sure locks are kept for as little time as possible
-    let session =
-      SpoticordSession::new(ctx, guild_id, channel_id, text_channel_id, owner_id).await?;
-
     self.sessions.insert(guild_id, session);
     self.owner_map.insert(owner_id, guild_id);
 
@@ -139,11 +133,15 @@ impl SessionManager {
     text_channel_id: ChannelId,
     owner_id: UserId,
   ) -> Result<(), SessionCreateError> {
+    // Create session first to make sure locks are kept for as little time as possible
+    let session =
+      SpoticordSession::new(ctx, guild_id, channel_id, text_channel_id, owner_id).await?;
+
     self
       .0
       .write()
       .await
-      .create_session(ctx, guild_id, channel_id, text_channel_id, owner_id)
+      .create_session(session, guild_id, owner_id)
       .await
   }
 

@@ -255,6 +255,14 @@ impl SpoticordSession {
           // Required for IpcPacket::TrackChange to work
           tokio::task::yield_now().await;
 
+          // Check if the session has been disconnected
+          if {
+            let inner = inner.read().await;
+            inner.disconnected
+          } {
+            break;
+          }
+
           let msg = match client.try_recv() {
             Ok(msg) => msg,
             Err(why) => {
