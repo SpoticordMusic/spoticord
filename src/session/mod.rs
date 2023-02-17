@@ -256,10 +256,11 @@ impl SpoticordSession {
           tokio::task::yield_now().await;
 
           // Check if the session has been disconnected
-          if {
+          let disconnected = {
             let inner = inner.read().await;
             inner.disconnected
-          } {
+          };
+          if disconnected {
             break;
           }
 

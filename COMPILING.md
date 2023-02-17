@@ -70,3 +70,7 @@ If you are actively developing Spoticord, you can use the following command to b
 ```sh
 cargo run
 ```
+
+# MSRV
+
+The minimum supported rust version is `1.64.0`.
