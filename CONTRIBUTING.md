@@ -38,7 +38,7 @@ We make use of `rustfmt` to format our code. You can install it by running `rust
 
 #### Git Hooks
 
-We make use of the pre-commit git hook to run `rustfmt` and `clippy` before you commit your code. To set up the git hooks you can run the following command:
+We make use of the pre-commit git hook to run `clippy` before you commit your code. To set up the git hooks you can run the following command:
 
   ```bash
   git config core.hooksPath .githooks

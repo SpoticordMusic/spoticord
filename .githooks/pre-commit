@@ -12,6 +12,4 @@ if [[ ${result} -ne 0 ]] ; then
   exit 1
 fi
 
-cargo fmt --all
-
 exit 0
