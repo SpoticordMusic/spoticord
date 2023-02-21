@@ -13,7 +13,7 @@ use crate::{
 
 pub const NAME: &str = "join";
 
-pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
+pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let guild = ctx
       .cache

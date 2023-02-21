@@ -1,0 +1,15 @@
+#!/bin/bash
+
+RED='\033[0;31m'
+BRED='\033[1;31m'
+NC='\033[0m'
+
+diff=$(cargo clippy --all -- -D warnings -D clippy::unwrap_used)
+result=$?
+
+if [[ ${result} -ne 0 ]] ; then
+  echo -e "\n${BRED}Cannot commit:${NC} There are some clippy issues in your code, check the above output for any errors."
+  exit 1
+fi
+
+exit 0

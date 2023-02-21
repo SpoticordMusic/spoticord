@@ -1,3 +1,6 @@
+pub mod manager;
+pub mod pbi;
+
 use self::{
   manager::{SessionCreateError, SessionManager},
   pbi::PlaybackInfo,
@@ -29,9 +32,6 @@ use std::{
   time::Duration,
 };
 use tokio::sync::Mutex;
-
-pub mod manager;
-mod pbi;
 
 #[derive(Clone)]
 pub struct SpoticordSession(Arc<RwLock<InnerSpoticordSession>>);
@@ -145,6 +145,42 @@ impl SpoticordSession {
 
     // Create the player
     self.create_player(ctx).await?;
+
+    Ok(())
+  }
+
+  /// Advance to the next track
+  pub async fn next(&mut self) -> Result<(), IpcError> {
+    if let Some(ref client) = self.0.read().await.client {
+      return client.send(IpcPacket::Next);
+    }
+
+    Ok(())
+  }
+
+  /// Rewind to the previous track
+  pub async fn previous(&mut self) -> Result<(), IpcError> {
+    if let Some(ref client) = self.0.read().await.client {
+      return client.send(IpcPacket::Previous);
+    }
+
+    Ok(())
+  }
+
+  /// Pause the current track
+  pub async fn pause(&mut self) -> Result<(), IpcError> {
+    if let Some(ref client) = self.0.read().await.client {
+      return client.send(IpcPacket::Pause);
+    }
+
+    Ok(())
+  }
+
+  /// Resume the current track
+  pub async fn resume(&mut self) -> Result<(), IpcError> {
+    if let Some(ref client) = self.0.read().await.client {
+      return client.send(IpcPacket::Resume);
+    }
 
     Ok(())
   }

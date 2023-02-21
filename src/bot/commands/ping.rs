@@ -11,7 +11,7 @@ use super::CommandOutput;
 
 pub const NAME: &str = "ping";
 
-pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
+pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     info!("Pong!");
 

@@ -31,7 +31,7 @@ pub struct SpoticordPlayer {
 }
 
 impl SpoticordPlayer {
-  pub fn create(client: ipc::Client) -> Self {
+  pub fn new(client: ipc::Client) -> Self {
     Self {
       client,
       session: None,
@@ -223,6 +223,30 @@ impl SpoticordPlayer {
     tokio::spawn(spirc_task);
   }
 
+  pub fn next(&mut self) {
+    if let Some(spirc) = &self.spirc {
+      spirc.next();
+    }
+  }
+
+  pub fn previous(&mut self) {
+    if let Some(spirc) = &self.spirc {
+      spirc.prev();
+    }
+  }
+
+  pub fn pause(&mut self) {
+    if let Some(spirc) = &self.spirc {
+      spirc.pause();
+    }
+  }
+
+  pub fn resume(&mut self) {
+    if let Some(spirc) = &self.spirc {
+      spirc.play();
+    }
+  }
+
   pub fn stop(&mut self) {
     if let Some(spirc) = self.spirc.take() {
       spirc.shutdown();
@@ -240,7 +264,7 @@ pub async fn main() {
   let client = ipc::Client::connect(tx_name, rx_name).expect("Failed to connect to IPC");
 
   // Create the player
-  let mut player = SpoticordPlayer::create(client.clone());
+  let mut player = SpoticordPlayer::new(client.clone());
 
   loop {
     let message = match client.try_recv() {
@@ -272,6 +296,22 @@ pub async fn main() {
         debug!("Disconnecting from Spotify");
 
         player.stop();
+      }
+
+      IpcPacket::Next => {
+        player.next();
+      }
+
+      IpcPacket::Previous => {
+        player.previous();
+      }
+
+      IpcPacket::Pause => {
+        player.pause();
+      }
+
+      IpcPacket::Resume => {
+        player.resume();
       }
 
       IpcPacket::Quit => {

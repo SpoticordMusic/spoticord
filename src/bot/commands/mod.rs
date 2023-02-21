@@ -5,7 +5,10 @@ use serenity::{
   builder::{CreateApplicationCommand, CreateApplicationCommands},
   model::application::command::Command,
   model::prelude::{
-    interaction::{application_command::ApplicationCommandInteraction, InteractionResponseType},
+    interaction::{
+      application_command::ApplicationCommandInteraction,
+      message_component::MessageComponentInteraction, InteractionResponseType,
+    },
     GuildId,
   },
   prelude::{Context, TypeMapKey},
@@ -29,6 +32,28 @@ pub async fn respond_message(
   ephemeral: bool,
 ) {
   if let Err(why) = command
+    .create_interaction_response(&ctx.http, |response| {
+      response
+        .kind(InteractionResponseType::ChannelMessageWithSource)
+        .interaction_response_data(|message| {
+          message
+            .embed(|embed| make_embed_message(embed, options))
+            .ephemeral(ephemeral)
+        })
+    })
+    .await
+  {
+    error!("Error sending message: {:?}", why);
+  }
+}
+
+pub async fn respond_component_message(
+  ctx: &Context,
+  component: &MessageComponentInteraction,
+  options: EmbedMessageOptions,
+  ephemeral: bool,
+) {
+  if let Err(why) = component
     .create_interaction_response(&ctx.http, |response| {
       response
         .kind(InteractionResponseType::ChannelMessageWithSource)
@@ -78,6 +103,7 @@ pub async fn defer_message(
 
 pub type CommandOutput = Pin<Box<dyn Future<Output = ()> + Send>>;
 pub type CommandExecutor = fn(Context, ApplicationCommandInteraction) -> CommandOutput;
+pub type ComponentExecutor = fn(Context, MessageComponentInteraction) -> CommandOutput;
 
 #[derive(Clone)]
 pub struct CommandManager {
@@ -87,7 +113,8 @@ pub struct CommandManager {
 #[derive(Clone)]
 pub struct CommandInfo {
   pub name: String,
-  pub executor: CommandExecutor,
+  pub command_executor: CommandExecutor,
+  pub component_executor: Option<ComponentExecutor>,
   pub register: fn(&mut CreateApplicationCommand) -> &mut CreateApplicationCommand,
 }
 
@@ -100,50 +127,71 @@ impl CommandManager {
     // Debug-only commands
     #[cfg(debug_assertions)]
     {
-      instance.insert_command(ping::NAME, ping::register, ping::run);
-      instance.insert_command(token::NAME, token::register, token::run);
+      instance.insert(ping::NAME, ping::register, ping::command, None);
+      instance.insert(token::NAME, token::register, token::command, None);
     }
 
     // Core commands
-    instance.insert_command(core::help::NAME, core::help::register, core::help::run);
-    instance.insert_command(
+    instance.insert(
+      core::help::NAME,
+      core::help::register,
+      core::help::command,
+      None,
+    );
+    instance.insert(
       core::version::NAME,
       core::version::register,
-      core::version::run,
+      core::version::command,
+      None,
     );
-    instance.insert_command(core::link::NAME, core::link::register, core::link::run);
-    instance.insert_command(
+    instance.insert(
+      core::link::NAME,
+      core::link::register,
+      core::link::command,
+      None,
+    );
+    instance.insert(
       core::unlink::NAME,
       core::unlink::register,
-      core::unlink::run,
+      core::unlink::command,
+      None,
     );
-    instance.insert_command(
+    instance.insert(
       core::rename::NAME,
       core::rename::register,
-      core::rename::run,
+      core::rename::command,
+      None,
     );
 
     // Music commands
-    instance.insert_command(music::join::NAME, music::join::register, music::join::run);
-    instance.insert_command(
+    instance.insert(
+      music::join::NAME,
+      music::join::register,
+      music::join::command,
+      None,
+    );
+    instance.insert(
       music::leave::NAME,
       music::leave::register,
-      music::leave::run,
+      music::leave::command,
+      None,
     );
-    instance.insert_command(
+    instance.insert(
       music::playing::NAME,
       music::playing::register,
-      music::playing::run,
+      music::playing::command,
+      Some(music::playing::component),
     );
 
     instance
   }
 
-  pub fn insert_command(
+  pub fn insert(
     &mut self,
     name: impl Into<String>,
     register: fn(&mut CreateApplicationCommand) -> &mut CreateApplicationCommand,
-    executor: CommandExecutor,
+    command_executor: CommandExecutor,
+    component_executor: Option<ComponentExecutor>,
   ) {
     let name = name.into();
 
@@ -152,12 +200,13 @@ impl CommandManager {
       CommandInfo {
         name,
         register,
-        executor,
+        command_executor,
+        component_executor,
       },
     );
   }
 
-  pub async fn register_commands(&self, ctx: &Context) {
+  pub async fn register(&self, ctx: &Context) {
     let cmds = &self.commands;
 
     debug!(
@@ -196,11 +245,12 @@ impl CommandManager {
     .expect("Failed to create global commands");
   }
 
+  // On slash command interaction
   pub async fn execute_command(&self, ctx: &Context, interaction: ApplicationCommandInteraction) {
     let command = self.commands.get(&interaction.data.name);
 
     if let Some(command) = command {
-      (command.executor)(ctx.clone(), interaction.clone()).await;
+      (command.command_executor)(ctx.clone(), interaction.clone()).await;
     } else {
       // Command does not exist
       if let Err(why) = interaction
@@ -217,6 +267,39 @@ impl CommandManager {
       {
         error!("Failed to respond to command: {}", why);
       }
+    }
+  }
+
+  // On message component interaction (e.g. button)
+  pub async fn execute_component(&self, ctx: &Context, interaction: MessageComponentInteraction) {
+    let command = match interaction.data.custom_id.split("::").next() {
+      Some(command) => command,
+      None => return,
+    };
+
+    let command = self.commands.get(command);
+
+    if let Some(command) = command {
+      if let Some(executor) = command.component_executor {
+        executor(ctx.clone(), interaction.clone()).await;
+
+        return;
+      }
+    }
+
+    if let Err(why) = interaction
+      .create_interaction_response(&ctx.http, |response| {
+        response
+          .kind(InteractionResponseType::ChannelMessageWithSource)
+          .interaction_response_data(|message| {
+            message
+              .content("Woops, that interaction doesn't exist")
+              .ephemeral(true)
+          })
+      })
+      .await
+    {
+      error!("Failed to respond to interaction: {}", why);
     }
   }
 }

@@ -31,4 +31,16 @@ pub enum IpcPacket {
 
   /// Sent when the user has switched their Spotify device away from Spoticord
   Stopped,
+
+  /// Request the player to advance to the next track
+  Next,
+
+  /// Request the player to go back to the previous track
+  Previous,
+
+  /// Request the player to pause playback
+  Pause,
+
+  /// Request the player to resume playback
+  Resume,
 }

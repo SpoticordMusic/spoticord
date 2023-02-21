@@ -11,7 +11,7 @@ use crate::{bot::commands::CommandOutput, consts::VERSION, utils::embed::Status}
 
 pub const NAME: &str = "version";
 
-pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
+pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     if let Err(why) = command
       .create_interaction_response(&ctx.http, |response| {

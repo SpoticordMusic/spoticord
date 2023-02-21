@@ -12,7 +12,7 @@ use super::CommandOutput;
 
 pub const NAME: &str = "token";
 
-pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
+pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let data = ctx.data.read().await;
     let db = data.get::<Database>().expect("to contain a value");

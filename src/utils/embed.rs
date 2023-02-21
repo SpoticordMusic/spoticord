@@ -8,6 +8,12 @@ pub enum Status {
   None = 0,
 }
 
+impl From<Status> for serenity::utils::Colour {
+  fn from(value: Status) -> Self {
+    Self(value as u32)
+  }
+}
+
 #[derive(Default)]
 pub struct EmbedMessageOptions {
   pub title: Option<String>,

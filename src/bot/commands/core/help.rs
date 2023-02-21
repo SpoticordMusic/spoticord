@@ -11,7 +11,7 @@ use crate::{
 
 pub const NAME: &str = "help";
 
-pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
+pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     respond_message(
       &ctx,

@@ -12,7 +12,7 @@ use crate::{
 
 pub const NAME: &str = "leave";
 
-pub fn run(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
+pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
     let data = ctx.data.read().await;
     let session_manager = data
