@@ -36,4 +36,12 @@ When writing code we ask you to code in a way that is consistent with the rest o
 
 We make use of `rustfmt` to format our code. You can install it by running `rustup component add rustfmt` and then running `cargo fmt --all` to format your code. It is generally recommended to run this command before you commit your code. If you use VSCode, you can install the [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=matklad.rust-analyzer) extension and enable the `Format on Save` option.
 
-Also, **please do not write code that may panic**. If you are not sure how to handle a case, please use `Result` or `Option` to handle it.
+#### Git Hooks
+
+We make use of the pre-commit git hook to run `rustfmt` and `clippy` before you commit your code. To set up the git hooks you can run the following command:
+
+  ```bash
+  git config core.hooksPath .githooks
+  ```
+
+If you want to skip this check, you can use the `--no-verify` flag in your git commit command. Do note however that code that does not pass these checks will not be merged.

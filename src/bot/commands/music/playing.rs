@@ -198,7 +198,7 @@ pub fn component(ctx: Context, mut interaction: MessageComponentInteraction) -> 
 
     // Check if session still exists
     let mut session = match session_manager
-      .get_session(interaction.guild_id.expect("to contain a value"))
+        .get_session(interaction.guild_id.expect("to contain a value"))
       .await
     {
       Some(session) => session,
