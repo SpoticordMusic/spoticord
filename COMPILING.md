@@ -71,6 +71,13 @@ If you are actively developing Spoticord, you can use the following command to b
 cargo run
 ```
 
+# Features
+As of now, Spoticord has one optional feature: `metrics`. This feature enables pushing metrics about the bot, like how many servers it is in, which tracks are being played and which commands are being executed. The metrics are designed to be pushed to a [Prometheus Pushgateway](https://prometheus.io/docs/instrumenting/pushing/). If you want to enable this feature, you can do so by running the following command:
+
+```sh
+cargo build --release --features metrics
+```
+
 # MSRV
 
 The minimum supported rust version is `1.64.0`.
