@@ -1,5 +1,7 @@
 /* This file implements all events for the Discord gateway */
 
+use super::commands::CommandManager;
+use crate::consts::MOTD;
 use log::*;
 use serenity::{
   async_trait,
@@ -13,9 +15,8 @@ use serenity::{
   prelude::{Context, EventHandler},
 };
 
-use crate::consts::MOTD;
-
-use super::commands::CommandManager;
+#[cfg(feature = "metrics")]
+use crate::metrics::MetricsManager;
 
 // If the GUILD_ID environment variable is set, only allow commands from that guild
 macro_rules! enforce_guild {
@@ -100,6 +101,12 @@ impl Handler {
 
     let data = ctx.data.read().await;
     let command_manager = data.get::<CommandManager>().expect("to contain a value");
+
+    #[cfg(feature = "metrics")]
+    {
+      let metrics = data.get::<MetricsManager>().expect("to contain a value");
+      metrics.command_exec(&command.data.name);
+    }
 
     command_manager.execute_command(&ctx, command).await;
   }

@@ -1,17 +1,19 @@
 use dotenv::dotenv;
 
+use crate::{bot::commands::CommandManager, database::Database, session::manager::SessionManager};
 use log::*;
 use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
 use songbird::SerenityInit;
 use std::{any::Any, env, process::exit};
 
-use crate::{
-  bot::commands::CommandManager, database::Database, session::manager::SessionManager,
-  stats::StatsManager,
-};
+#[cfg(feature = "metrics")]
+use metrics::MetricsManager;
 
 #[cfg(unix)]
 use tokio::signal::unix::SignalKind;
+
+#[cfg(feature = "metrics")]
+mod metrics;
 
 mod audio;
 mod bot;
@@ -21,7 +23,6 @@ mod ipc;
 mod librespot_ext;
 mod player;
 mod session;
-mod stats;
 mod utils;
 
 #[tokio::main]
@@ -70,9 +71,13 @@ async fn main() {
 
   let token = env::var("DISCORD_TOKEN").expect("a token in the environment");
   let db_url = env::var("DATABASE_URL").expect("a database URL in the environment");
-  let kv_url = env::var("KV_URL").expect("a redis URL in the environment");
 
-  let stats_manager = StatsManager::new(kv_url).expect("Failed to connect to redis");
+  #[cfg(feature = "metrics")]
+  let metrics_manager = {
+    let metrics_url = env::var("METRICS_URL").expect("a prometheus pusher URL in the environment");
+    MetricsManager::new(metrics_url)
+  };
+
   let session_manager = SessionManager::new();
 
   // Create client
@@ -92,10 +97,13 @@ async fn main() {
     data.insert::<Database>(Database::new(db_url, None));
     data.insert::<CommandManager>(CommandManager::new());
     data.insert::<SessionManager>(session_manager.clone());
+
+    #[cfg(feature = "metrics")]
+    data.insert::<MetricsManager>(metrics_manager.clone());
   }
 
   let shard_manager = client.shard_manager.clone();
-  let cache = client.cache_and_http.cache.clone();
+  let _cache = client.cache_and_http.cache.clone();
 
   #[cfg(unix)]
   let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
@@ -111,28 +119,27 @@ async fn main() {
     loop {
       tokio::select! {
         _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-          let guild_count = cache.guilds().len();
-          let active_count = session_manager.get_active_session_count().await;
-          let total_count = session_manager.get_session_count().await;
+          #[cfg(feature = "metrics")]
+          {
+            let guild_count = _cache.guilds().len();
+            let active_count = session_manager.get_active_session_count().await;
+            let total_count = session_manager.get_session_count().await;
 
-          if let Err(why) = stats_manager.set_server_count(guild_count) {
-            error!("Failed to update server count: {}", why);
+            metrics_manager.set_server_count(guild_count);
+            metrics_manager.set_active_sessions(active_count);
+            metrics_manager.set_total_sessions(total_count);
+
+            // Yes, I like to handle my s's when I'm working with amounts
+            debug!(
+              "Updated metrics: {} guild{}, {} active session{}, {} total session{}",
+              guild_count,
+              if guild_count == 1 { "" } else { "s" },
+              active_count,
+              if active_count == 1 { "" } else { "s" },
+              total_count,
+              if total_count == 1 { "" } else { "s" }
+            );
           }
-
-          if let Err(why) = stats_manager.set_active_count(active_count) {
-            error!("Failed to update active count: {}", why);
-          }
-
-          // Yes, I like to handle my s's when I'm working with amounts
-          debug!(
-            "Updated stats: {} guild{}, {} active session{}, {} total session{}",
-            guild_count,
-            if guild_count == 1 { "" } else { "s" },
-            active_count,
-            if active_count == 1 { "" } else { "s" },
-            total_count,
-            if total_count == 1 { "" } else { "s" }
-          );
         }
 
         _ = tokio::signal::ctrl_c() => {
@@ -158,6 +165,9 @@ async fn main() {
           info!("Received terminate signal, shutting down...");
 
           shard_manager.lock().await.shutdown_all().await;
+
+          #[cfg(feature = "metrics")]
+          metrics_manager.stop();
 
           break;
         }
