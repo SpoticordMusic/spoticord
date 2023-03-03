@@ -173,11 +173,13 @@ impl SessionManager {
   }
 
   /// Get the amount of sessions
+  #[allow(dead_code)]
   pub async fn get_session_count(&self) -> usize {
     self.0.read().await.get_session_count()
   }
 
   /// Get the amount of sessions with an owner
+  #[allow(dead_code)]
   pub async fn get_active_session_count(&self) -> usize {
     self.0.read().await.get_active_session_count().await
   }

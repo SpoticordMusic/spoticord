@@ -106,4 +106,28 @@ impl PlaybackInfo {
       None
     }
   }
+
+  /// Get the type of audio (track or episode)
+  #[allow(dead_code)]
+  pub fn get_type(&self) -> Option<String> {
+    if self.track.is_some() {
+      Some("track".into())
+    } else if self.episode.is_some() {
+      Some("episode".into())
+    } else {
+      None
+    }
+  }
+
+  /// Get the public facing url of the track or episode
+  #[allow(dead_code)]
+  pub fn get_url(&self) -> Option<&str> {
+    if let Some(ref track) = self.track {
+      Some(track.external_urls.spotify.as_str())
+    } else if let Some(ref episode) = self.episode {
+      Some(episode.external_urls.spotify.as_str())
+    } else {
+      None
+    }
+  }
 }

@@ -33,6 +33,9 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+#[cfg(feature = "metrics")]
+use crate::metrics::MetricsManager;
+
 #[derive(Clone)]
 pub struct SpoticordSession(Arc<RwLock<InnerSpoticordSession>>);
 
@@ -58,6 +61,9 @@ struct InnerSpoticordSession {
   /// Whether the session has been disconnected
   /// If this is true then this instance should no longer be used and dropped
   disconnected: bool,
+
+  #[cfg(feature = "metrics")]
+  metrics: MetricsManager,
 }
 
 impl SpoticordSession {
@@ -72,6 +78,12 @@ impl SpoticordSession {
     let data = ctx.data.read().await;
     let session_manager = data
       .get::<SessionManager>()
+      .expect("to contain a value")
+      .clone();
+
+    #[cfg(feature = "metrics")]
+    let metrics = data
+      .get::<MetricsManager>()
       .expect("to contain a value")
       .clone();
 
@@ -98,6 +110,9 @@ impl SpoticordSession {
       disconnect_handle: None,
       client: None,
       disconnected: false,
+
+      #[cfg(feature = "metrics")]
+      metrics,
     };
 
     let mut instance = Self(Arc::new(RwLock::new(inner)));
@@ -520,6 +535,14 @@ impl SpoticordSession {
 
     if let Some(pbi) = inner.playback_info.as_mut() {
       pbi.update_track_episode(spotify_id, track, episode);
+    }
+
+    // Send track play event to metrics
+    #[cfg(feature = "metrics")]
+    {
+      if let Some(ref pbi) = inner.playback_info {
+        inner.metrics.track_play(pbi);
+      }
     }
 
     Ok(())

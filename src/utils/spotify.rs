@@ -24,10 +24,16 @@ pub struct Album {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ExternalUrls {
+  pub spotify: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Track {
   pub name: String,
   pub artists: Vec<Artist>,
   pub album: Album,
+  pub external_urls: ExternalUrls,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -40,6 +46,7 @@ pub struct Show {
 pub struct Episode {
   pub name: String,
   pub show: Show,
+  pub external_urls: ExternalUrls,
 }
 
 pub async fn get_username(token: impl Into<String>) -> Result<String, String> {

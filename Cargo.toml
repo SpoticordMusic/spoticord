@@ -1,6 +1,6 @@
 [package]
 name = "spoticord"
-version = "2.0.0-beta"
+version = "2.0.0-pre"
 edition = "2021"
 rust-version = "1.64.0"
 
@@ -8,12 +8,18 @@ rust-version = "1.64.0"
 name = "spoticord"
 path = "src/main.rs"
 
+[features]
+default = []
+metrics = ["lazy_static", "prometheus"]
+
 [dependencies]
 dotenv = "0.15.0"
 env_logger = "0.10.0"
 ipc-channel = { version = "0.16.0", features = ["async"] }
+lazy_static = { version = "1.4.0", optional = true }
 librespot = { version = "0.4.2", default-features = false }
 log = "0.4.17"
+prometheus = { version = "0.13.3", optional = true, features = ["push", "process"] }
 redis = "0.22.3"
 reqwest = "0.11.14"
 samplerate = "0.2.4"
