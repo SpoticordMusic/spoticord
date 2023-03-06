@@ -29,11 +29,8 @@ lazy_static! {
     "Total number of servers with Spoticord in a voice channel"
   )
   .unwrap();
-  static ref TRACKS_PLAYED: IntCounterVec = register_int_counter_vec!(
-    opts!("tracks_played", "Tracks Played"),
-    &["type", "name", "artists", "uri"]
-  )
-  .unwrap();
+  static ref TRACKS_PLAYED: IntCounterVec =
+    register_int_counter_vec!(opts!("tracks_played", "Tracks Played"), &["type"]).unwrap();
   static ref COMMANDS_EXECUTED: IntCounterVec = register_int_counter_vec!(
     opts!("commands_executed", "Commands Executed"),
     &["command"]
@@ -104,14 +101,7 @@ impl MetricsManager {
       None => return,
     };
 
-    TRACKS_PLAYED
-      .with_label_values(&[
-        &track_type,
-        &track.get_name().expect("To have a name"),
-        &track.get_artists().expect("To have artists"),
-        &track.get_url().expect("To have a URL"),
-      ])
-      .inc();
+    TRACKS_PLAYED.with_label_values(&[&track_type]).inc();
   }
 
   pub fn command_exec(&self, command: &str) {
