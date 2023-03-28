@@ -1,3 +1,6 @@
+[registries.crates-io]
+protocol = "sparse"
+
 [target.x86_64-pc-windows-gnu]
 rustflags = "-C link-args=-lssp" # Does not compile without this line
 

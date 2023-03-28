@@ -80,4 +80,4 @@ cargo build --release --features metrics
 
 # MSRV
 
-The minimum supported rust version is `1.64.0`.
+The current minimum supported rust version is `1.68.0`.
