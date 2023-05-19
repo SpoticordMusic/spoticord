@@ -47,10 +47,7 @@ impl EventHandler for Handler {
 
     debug!("Ready received, logged in as {}", ready.user.name);
 
-    // Set this to true only when a command is removed/updated/created
-    if false {
-      command_manager.register(&ctx).await;
-    }
+    command_manager.register(&ctx).await;
 
     ctx.set_activity(Activity::listening(MOTD)).await;
 
