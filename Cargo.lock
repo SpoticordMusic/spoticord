@@ -2603,7 +2603,7 @@ dependencies = [
 
 [[package]]
 name = "spoticord"
-version = "2.0.0-pre"
+version = "2.0.0"
 dependencies = [
  "dotenv",
  "env_logger 0.10.0",
