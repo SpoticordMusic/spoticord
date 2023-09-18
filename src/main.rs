@@ -13,7 +13,6 @@ mod audio;
 mod bot;
 mod consts;
 mod database;
-mod ipc;
 mod librespot_ext;
 mod player;
 mod session;

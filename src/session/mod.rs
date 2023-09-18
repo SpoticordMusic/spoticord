@@ -764,6 +764,7 @@ impl SpoticordSession {
   }
 
   /// Get the channel id
+  #[allow(dead_code)]
   pub async fn text_channel_id(&self) -> ChannelId {
     self.0.read().await.text_channel_id
   }
@@ -777,6 +778,7 @@ impl SpoticordSession {
     self.0.read().await.call.clone()
   }
 
+  #[allow(dead_code)]
   pub async fn http(&self) -> Arc<Http> {
     self.0.read().await.http.clone()
   }

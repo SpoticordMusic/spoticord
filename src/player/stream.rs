@@ -5,7 +5,8 @@ use std::{
 
 use songbird::input::reader::MediaSource;
 
-const MAX_SIZE: usize = 1 * 1024 * 1024;
+// TODO: Find optimal value
+const MAX_SIZE: usize = 1024 * 1024;
 
 #[derive(Clone)]
 pub struct Stream {
@@ -45,7 +46,7 @@ impl Write for Stream {
     let mut buffer = mutex.lock().expect("Mutex was poisoned");
 
     while buffer.len() + buf.len() > MAX_SIZE {
-      buffer = condvar.wait(buffer).unwrap();
+      buffer = condvar.wait(buffer).expect("Mutex was poisoned");
     }
 
     buffer.extend_from_slice(buf);
