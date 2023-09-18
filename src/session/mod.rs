@@ -30,8 +30,13 @@ use songbird::{
   tracks::TrackHandle,
   Call, Event, EventContext, EventHandler,
 };
-use std::{sync::Arc, time::Duration};
-use tokio::sync::Mutex;
+use std::{
+  io::Write,
+  ops::{Deref, DerefMut},
+  sync::Arc,
+  time::Duration,
+};
+use tokio::sync::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 
 #[derive(Clone)]
 pub struct SpoticordSession(Arc<RwLock<InnerSpoticordSession>>);
@@ -54,6 +59,8 @@ struct InnerSpoticordSession {
   disconnect_handle: Option<tokio::task::JoinHandle<()>>,
 
   spirc: Option<Spirc>,
+
+  player: Option<Player>,
 
   /// Whether the session has been disconnected
   /// If this is true then this instance should no longer be used and dropped
@@ -97,6 +104,7 @@ impl SpoticordSession {
       playback_info: None,
       disconnect_handle: None,
       spirc: None,
+      player: None,
       disconnected: false,
     };
 
@@ -132,14 +140,13 @@ impl SpoticordSession {
       .clone();
 
     {
-      let mut inner = self.0.write().await;
+      let mut inner = self.acquire_write().await;
       inner.owner = Some(owner_id);
     }
 
     {
-      let inner = self.0.clone();
-      let inner = inner.read().await;
-      session_manager.set_owner(owner_id, inner.guild_id).await;
+      let guild_id = self.acquire_read().await.guild_id;
+      session_manager.set_owner(owner_id, guild_id).await;
     }
 
     // Create the player
@@ -150,28 +157,28 @@ impl SpoticordSession {
 
   /// Advance to the next track
   pub async fn next(&mut self) {
-    if let Some(ref spirc) = self.0.read().await.spirc {
+    if let Some(ref spirc) = self.acquire_read().await.spirc {
       spirc.next();
     }
   }
 
   /// Rewind to the previous track
   pub async fn previous(&mut self) {
-    if let Some(ref spirc) = self.0.read().await.spirc {
+    if let Some(ref spirc) = self.acquire_read().await.spirc {
       spirc.prev();
     }
   }
 
   /// Pause the current track
   pub async fn pause(&mut self) {
-    if let Some(ref spirc) = self.0.read().await.spirc {
+    if let Some(ref spirc) = self.acquire_read().await.spirc {
       spirc.pause();
     }
   }
 
   /// Resume the current track
   pub async fn resume(&mut self) {
-    if let Some(ref spirc) = self.0.read().await.spirc {
+    if let Some(ref spirc) = self.acquire_read().await.spirc {
       spirc.play();
     }
   }
@@ -237,8 +244,7 @@ impl SpoticordSession {
       }
     };
 
-    // Handle IPC packets
-    // This will automatically quit once the IPC connection is closed
+    // Handle events
     tokio::spawn({
       let track = track_handle.clone();
       let ctx = ctx.clone();
@@ -367,126 +373,16 @@ impl SpoticordSession {
                 }
 
                 SinkEvent::Stop => {
-                  check_result(track.pause());
+                  // EXPERIMENT: It may be beneficial to *NOT* pause songbird here
+                  // We already have a fallback if no audio is present in the buffer (write all zeroes aka silence)
+                  // So commenting this out may help prevent a substantial portion of jitter
+                  // This comes at a cost of more bandwidth, though opus should compress it down to almost nothing
+
+                  // check_result(track.pause());
                 }
               }
             }
           };
-
-          // match event {
-          //   // Session connect error
-          //   IpcPacket::ConnectError(why) => {
-          //     error!("Failed to connect to Spotify: {:?}", why);
-
-          //     // Notify the user in the text channel
-          //     if let Err(why) = instance
-          //       .text_channel_id()
-          //       .await
-          //       .send_message(&instance.http().await, |message| {
-          //         message.embed(|embed| {
-          //           embed.title("Failed to connect to Spotify");
-          //           embed.description(why);
-          //           embed.footer(|footer| footer.text("Please try again"));
-          //           embed.color(Status::Error as u64);
-
-          //           embed
-          //         });
-
-          //         message
-          //       })
-          //       .await
-          //     {
-          //       error!("Failed to send error message: {:?}", why);
-          //     }
-
-          //     break;
-          //   }
-
-          //   // Sink requests playback to start/resume
-          //   IpcPacket::StartPlayback => {
-          //     check_result(track.play());
-          //   }
-
-          //   // Sink requests playback to pause
-          //   IpcPacket::StopPlayback => {
-          //     check_result(track.pause());
-          //   }
-
-          //   // A new track has been set by the player
-          //   IpcPacket::TrackChange(track) => {
-          //     // Convert to SpotifyId
-          //     let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
-
-          //     let instance = instance.clone();
-          //     let ctx = ctx.clone();
-
-          //     // Fetch track info
-          //     // This is done in a separate task to avoid blocking the IPC handler
-          //     tokio::spawn(async move {
-          //       if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-          //         error!("Failed to update track: {:?}", why);
-
-          //         instance.player_stopped().await;
-          //       }
-          //     });
-          //   }
-
-          //   // The player has started playing a track
-          //   IpcPacket::Playing(track, position_ms, duration_ms) => {
-          //     // Convert to SpotifyId
-          //     let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
-
-          //     let was_none = instance
-          //       .update_playback(duration_ms, position_ms, true)
-          //       .await;
-
-          //     if was_none {
-          //       // Stop player if update track fails
-          //       if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-          //         error!("Failed to update track: {:?}", why);
-
-          //         instance.player_stopped().await;
-          //         return;
-          //       }
-          //     }
-          //   }
-
-          //   IpcPacket::Paused(track, position_ms, duration_ms) => {
-          //     instance.start_disconnect_timer().await;
-
-          //     // Convert to SpotifyId
-          //     let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
-
-          //     let was_none = instance
-          //       .update_playback(duration_ms, position_ms, false)
-          //       .await;
-
-          //     if was_none {
-          //       // Stop player if update track fails
-
-          //       if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-          //         error!("Failed to update track: {:?}", why);
-
-          //         instance.player_stopped().await;
-          //         return;
-          //       }
-          //     }
-          //   }
-
-          //   IpcPacket::Stopped => {
-          //     check_result(track.pause());
-
-          //     {
-          //       let mut inner = inner.write().await;
-          //       inner.playback_info.take();
-          //     }
-
-          //     instance.start_disconnect_timer().await;
-          //   }
-
-          //   // Ignore other packets
-          //   _ => {}
-          // }
         }
 
         // Clean up session
@@ -497,9 +393,10 @@ impl SpoticordSession {
     });
 
     // Update inner client and track
-    let mut inner = self.0.write().await;
+    let mut inner = self.acquire_write().await;
     inner.track = Some(track_handle);
     inner.spirc = Some(spirc);
+    inner.player = Some(player);
 
     Ok(())
   }
@@ -566,7 +463,7 @@ impl SpoticordSession {
     }
 
     // Update track/episode
-    let mut inner = self.0.write().await;
+    let mut inner = self.acquire_write().await;
 
     if let Some(pbi) = inner.playback_info.as_mut() {
       pbi.update_track_episode(spotify_id, track, episode);
@@ -577,7 +474,7 @@ impl SpoticordSession {
 
   /// Called when the player must stop, but not leave the call
   async fn player_stopped(&self) {
-    let mut inner = self.0.write().await;
+    let mut inner = self.acquire_write().await;
 
     if let Some(spirc) = inner.spirc.take() {
       spirc.shutdown();
@@ -617,7 +514,7 @@ impl SpoticordSession {
     //  read lock to read the current owner.
     // This would deadlock if we have an active write lock
     {
-      let mut inner = self.0.write().await;
+      let mut inner = self.acquire_write().await;
       inner.disconnect_no_abort().await;
     }
 
@@ -633,7 +530,7 @@ impl SpoticordSession {
     };
 
     {
-      let mut inner = self.0.write().await;
+      let mut inner = self.acquire_write().await;
 
       if is_none {
         inner.playback_info = Some(PlaybackInfo::new(duration_ms, position_ms, playing));
@@ -659,8 +556,8 @@ impl SpoticordSession {
   async fn start_disconnect_timer(&self) {
     self.stop_disconnect_timer().await;
 
-    let inner_arc = self.0.clone();
-    let mut inner = inner_arc.write().await;
+    let arc_handle = self.0.clone();
+    let mut inner = self.acquire_write().await;
 
     // Check if we are already disconnected
     if inner.disconnected {
@@ -668,7 +565,7 @@ impl SpoticordSession {
     }
 
     inner.disconnect_handle = Some(tokio::spawn({
-      let inner = inner_arc.clone();
+      let inner = arc_handle.clone();
       let instance = self.clone();
 
       async move {
@@ -705,7 +602,7 @@ impl SpoticordSession {
 
   /// Stop the disconnect timer (if one is running)
   async fn stop_disconnect_timer(&self) {
-    let mut inner = self.0.write().await;
+    let mut inner = self.acquire_write().await;
     if let Some(handle) = inner.disconnect_handle.take() {
       handle.abort();
     }
@@ -714,7 +611,7 @@ impl SpoticordSession {
   /// Disconnect from the VC and send a message to the text channel
   pub async fn disconnect_with_message(&self, content: &str) {
     {
-      let mut inner = self.0.write().await;
+      let mut inner = self.acquire_write().await;
 
       // Firstly we disconnect
       inner.disconnect_no_abort().await;
@@ -745,48 +642,97 @@ impl SpoticordSession {
 
   /// Get the owner
   pub async fn owner(&self) -> Option<UserId> {
-    self.0.read().await.owner
+    self.acquire_read().await.owner
   }
 
   /// Get the session manager
   pub async fn session_manager(&self) -> SessionManager {
-    self.0.read().await.session_manager.clone()
+    self.acquire_read().await.session_manager.clone()
   }
 
   /// Get the guild id
   pub async fn guild_id(&self) -> GuildId {
-    self.0.read().await.guild_id
+    self.acquire_read().await.guild_id
   }
 
   /// Get the channel id
   pub async fn channel_id(&self) -> ChannelId {
-    self.0.read().await.channel_id
+    self.acquire_read().await.channel_id
   }
 
   /// Get the channel id
   #[allow(dead_code)]
   pub async fn text_channel_id(&self) -> ChannelId {
-    self.0.read().await.text_channel_id
+    self.acquire_read().await.text_channel_id
   }
 
   /// Get the playback info
   pub async fn playback_info(&self) -> Option<PlaybackInfo> {
-    self.0.read().await.playback_info.clone()
+    self.acquire_read().await.playback_info.clone()
   }
 
   pub async fn call(&self) -> Arc<Mutex<Call>> {
-    self.0.read().await.call.clone()
+    self.acquire_read().await.call.clone()
   }
 
   #[allow(dead_code)]
   pub async fn http(&self) -> Arc<Http> {
-    self.0.read().await.http.clone()
+    self.acquire_read().await.http.clone()
+  }
+
+  async fn acquire_read(&self) -> ReadLock {
+    ReadLock(self.0.read().await)
+  }
+
+  async fn acquire_write(&self) -> WriteLock {
+    WriteLock(self.0.write().await)
+  }
+}
+
+struct ReadLock<'a>(RwLockReadGuard<'a, InnerSpoticordSession>);
+
+impl<'a> Deref for ReadLock<'a> {
+  type Target = RwLockReadGuard<'a, InnerSpoticordSession>;
+
+  #[inline]
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl<'a> DerefMut for ReadLock<'a> {
+  #[inline]
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
+  }
+}
+
+struct WriteLock<'a>(RwLockWriteGuard<'a, InnerSpoticordSession>);
+
+impl<'a> Deref for WriteLock<'a> {
+  type Target = RwLockWriteGuard<'a, InnerSpoticordSession>;
+
+  #[inline]
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl<'a> DerefMut for WriteLock<'a> {
+  #[inline]
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
   }
 }
 
 impl InnerSpoticordSession {
   /// Internal version of disconnect, which does not abort the disconnect timer
   async fn disconnect_no_abort(&mut self) {
+    // Flush stream so that it is not permanently blocking the thread
+    if let Some(player) = self.player.take() {
+      player.get_stream().flush().ok();
+    }
+
     self.disconnected = true;
     self
       .session_manager
@@ -810,12 +756,6 @@ impl InnerSpoticordSession {
     if let Err(why) = call.leave().await {
       error!("Failed to leave voice channel: {:?}", why);
     }
-  }
-}
-
-impl Drop for InnerSpoticordSession {
-  fn drop(&mut self) {
-    trace!("Dropping inner session");
   }
 }
 

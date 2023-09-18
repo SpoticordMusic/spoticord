@@ -5,8 +5,10 @@ use std::{
 
 use songbird::input::reader::MediaSource;
 
-// TODO: Find optimal value
-const MAX_SIZE: usize = 1024 * 1024;
+/// The lower the value, the less latency
+///
+/// Too low of a value results in unpredictable audio
+const MAX_SIZE: usize = 32 * 1024;
 
 #[derive(Clone)]
 pub struct Stream {
@@ -26,15 +28,19 @@ impl Read for Stream {
     let (mutex, condvar) = &*self.inner;
     let mut buffer = mutex.lock().expect("Mutex was poisoned");
 
-    log::trace!("Read!");
+    // Prevent Discord jitter by filling buffer with zeroes if we don't have any audio
+    // (i.e. when you skip too far ahead in a song which hasn't been downloaded yet)
+    if buffer.is_empty() {
+      buf.fill(0);
+      condvar.notify_all();
 
-    while buffer.is_empty() {
-      buffer = condvar.wait(buffer).expect("Mutex was poisoned");
+      return Ok(buf.len());
     }
 
     let max_read = usize::min(buf.len(), buffer.len());
     buf[0..max_read].copy_from_slice(&buffer[0..max_read]);
     buffer.drain(0..max_read);
+    condvar.notify_all();
 
     Ok(max_read)
   }
@@ -56,6 +62,12 @@ impl Write for Stream {
   }
 
   fn flush(&mut self) -> std::io::Result<()> {
+    let (mutex, condvar) = &*self.inner;
+    let mut buffer = mutex.lock().expect("Mutex was poisoned");
+
+    buffer.clear();
+    condvar.notify_all();
+
     Ok(())
   }
 }

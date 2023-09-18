@@ -1,8 +1,9 @@
-pub mod stream;
-
 use librespot::{
   connect::spirc::Spirc,
-  core::{config::ConnectConfig, session::Session},
+  core::{
+    config::{ConnectConfig, SessionConfig},
+    session::Session,
+  },
   discovery::Credentials,
   playback::{
     config::{Bitrate, PlayerConfig, VolumeCtrl},
@@ -13,12 +14,10 @@ use librespot::{
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
-  audio::{SinkEvent, StreamSink},
+  audio::{stream::Stream, SinkEvent, StreamSink},
   librespot_ext::discovery::CredentialsExt,
   utils,
 };
-
-use self::stream::Stream;
 
 pub struct Player {
   stream: Stream,
@@ -59,7 +58,16 @@ impl Player {
     }
 
     // Connect the session
-    let (session, _) = Session::connect(Default::default(), credentials, None, false).await?;
+    let (session, _) = Session::connect(
+      SessionConfig {
+        ap_port: Some(9999), // Force the use of ap.spotify.com, which has the lowest latency
+        ..Default::default()
+      },
+      credentials,
+      None,
+      false,
+    )
+    .await?;
     self.session = Some(session.clone());
 
     let mixer = (mixer::find(Some("softvol")).expect("to exist"))(MixerConfig {

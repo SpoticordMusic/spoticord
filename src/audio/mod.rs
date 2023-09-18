@@ -1,11 +1,13 @@
+pub mod stream;
+
+use self::stream::Stream;
+
 use librespot::playback::audio_backend::{Sink, SinkAsBytes, SinkError, SinkResult};
 use librespot::playback::convert::Converter;
 use librespot::playback::decoder::AudioPacket;
 use log::error;
 use std::io::Write;
 use tokio::sync::mpsc::UnboundedSender;
-
-use crate::player::stream::Stream;
 
 pub enum SinkEvent {
   Start,
@@ -26,6 +28,8 @@ impl StreamSink {
 impl Sink for StreamSink {
   fn start(&mut self) -> SinkResult<()> {
     if let Err(why) = self.sender.send(SinkEvent::Start) {
+      // WARNING: Returning an error causes librespot-playback to exit the process with status 1
+
       error!("Failed to send start playback event: {why}");
       return Err(SinkError::ConnectionRefused(why.to_string()));
     }
@@ -35,9 +39,13 @@ impl Sink for StreamSink {
 
   fn stop(&mut self) -> SinkResult<()> {
     if let Err(why) = self.sender.send(SinkEvent::Stop) {
+      // WARNING: Returning an error causes librespot-playback to exit the process with status 1
+
       error!("Failed to send start playback event: {why}");
       return Err(SinkError::ConnectionRefused(why.to_string()));
     }
+
+    self.stream.flush().ok();
 
     Ok(())
   }

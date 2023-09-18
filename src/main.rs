@@ -91,6 +91,7 @@ async fn main() {
         _ = tokio::signal::ctrl_c() => {
           info!("Received interrupt signal, shutting down...");
 
+          session_manager.shutdown().await;
           shard_manager.lock().await.shutdown_all().await;
 
           break;
@@ -110,6 +111,7 @@ async fn main() {
         }, if term.is_some() => {
           info!("Received terminate signal, shutting down...");
 
+          session_manager.shutdown().await;
           shard_manager.lock().await.shutdown_all().await;
 
           break;
