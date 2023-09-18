@@ -1,16 +1,12 @@
 [package]
 name = "spoticord"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 rust-version = "1.65.0"
 
 [[bin]]
 name = "spoticord"
 path = "src/main.rs"
-
-[features]
-default = []
-metrics = ["lazy_static", "prometheus"]
 
 [dependencies]
 dotenv = "0.15.0"

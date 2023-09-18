@@ -6,14 +6,8 @@ use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
 use songbird::SerenityInit;
 use std::{any::Any, env, process::exit};
 
-#[cfg(feature = "metrics")]
-use metrics::MetricsManager;
-
 #[cfg(unix)]
 use tokio::signal::unix::SignalKind;
-
-#[cfg(feature = "metrics")]
-mod metrics;
 
 mod audio;
 mod bot;
@@ -41,20 +35,6 @@ async fn main() {
 
   env_logger::init();
 
-  let args: Vec<String> = env::args().collect();
-
-  if args.len() > 2 && &args[1] == "--player" {
-    // Woah! We're running in player mode!
-
-    debug!("Starting Spoticord player");
-
-    player::main().await;
-
-    debug!("Player exited, shutting down");
-
-    return;
-  }
-
   info!("It's a good day");
   info!(" - Spoticord {}", time::OffsetDateTime::now_utc().year());
 
@@ -71,12 +51,6 @@ async fn main() {
 
   let token = env::var("DISCORD_TOKEN").expect("a token in the environment");
   let db_url = env::var("DATABASE_URL").expect("a database URL in the environment");
-
-  #[cfg(feature = "metrics")]
-  let metrics_manager = {
-    let metrics_url = env::var("METRICS_URL").expect("a prometheus pusher URL in the environment");
-    MetricsManager::new(metrics_url)
-  };
 
   let session_manager = SessionManager::new();
 
@@ -97,9 +71,6 @@ async fn main() {
     data.insert::<Database>(Database::new(db_url, None));
     data.insert::<CommandManager>(CommandManager::new());
     data.insert::<SessionManager>(session_manager.clone());
-
-    #[cfg(feature = "metrics")]
-    data.insert::<MetricsManager>(metrics_manager.clone());
   }
 
   let shard_manager = client.shard_manager.clone();
@@ -118,30 +89,6 @@ async fn main() {
   tokio::spawn(async move {
     loop {
       tokio::select! {
-        _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-          #[cfg(feature = "metrics")]
-          {
-            let guild_count = _cache.guilds().len();
-            let active_count = session_manager.get_active_session_count().await;
-            let total_count = session_manager.get_session_count().await;
-
-            metrics_manager.set_server_count(guild_count);
-            metrics_manager.set_active_sessions(active_count);
-            metrics_manager.set_total_sessions(total_count);
-
-            // Yes, I like to handle my s's when I'm working with amounts
-            debug!(
-              "Updated metrics: {} guild{}, {} active session{}, {} total session{}",
-              guild_count,
-              if guild_count == 1 { "" } else { "s" },
-              active_count,
-              if active_count == 1 { "" } else { "s" },
-              total_count,
-              if total_count == 1 { "" } else { "s" }
-            );
-          }
-        }
-
         _ = tokio::signal::ctrl_c() => {
           info!("Received interrupt signal, shutting down...");
 
@@ -165,9 +112,6 @@ async fn main() {
           info!("Received terminate signal, shutting down...");
 
           shard_manager.lock().await.shutdown_all().await;
-
-          #[cfg(feature = "metrics")]
-          metrics_manager.stop();
 
           break;
         }

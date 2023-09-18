@@ -6,13 +6,17 @@ use self::{
   pbi::PlaybackInfo,
 };
 use crate::{
+  audio::SinkEvent,
   consts::DISCONNECT_TIME,
   database::{Database, DatabaseError},
-  ipc::{self, packet::IpcPacket, Client},
+  player::Player,
   utils::{embed::Status, spotify},
 };
-use ipc_channel::ipc::{IpcError, TryRecvError};
-use librespot::core::spotify_id::{SpotifyAudioType, SpotifyId};
+use librespot::{
+  connect::spirc::Spirc,
+  core::spotify_id::{SpotifyAudioType, SpotifyId},
+  playback::player::PlayerEvent,
+};
 use log::*;
 use serenity::{
   async_trait,
@@ -22,19 +26,12 @@ use serenity::{
 };
 use songbird::{
   create_player,
-  input::{children_to_reader, Codec, Container, Input},
+  input::{Codec, Container, Input, Reader},
   tracks::TrackHandle,
   Call, Event, EventContext, EventHandler,
 };
-use std::{
-  process::{Command, Stdio},
-  sync::Arc,
-  time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
-
-#[cfg(feature = "metrics")]
-use crate::metrics::MetricsManager;
 
 #[derive(Clone)]
 pub struct SpoticordSession(Arc<RwLock<InnerSpoticordSession>>);
@@ -56,14 +53,11 @@ struct InnerSpoticordSession {
 
   disconnect_handle: Option<tokio::task::JoinHandle<()>>,
 
-  client: Option<Client>,
+  spirc: Option<Spirc>,
 
   /// Whether the session has been disconnected
   /// If this is true then this instance should no longer be used and dropped
   disconnected: bool,
-
-  #[cfg(feature = "metrics")]
-  metrics: MetricsManager,
 }
 
 impl SpoticordSession {
@@ -78,12 +72,6 @@ impl SpoticordSession {
     let data = ctx.data.read().await;
     let session_manager = data
       .get::<SessionManager>()
-      .expect("to contain a value")
-      .clone();
-
-    #[cfg(feature = "metrics")]
-    let metrics = data
-      .get::<MetricsManager>()
       .expect("to contain a value")
       .clone();
 
@@ -108,15 +96,11 @@ impl SpoticordSession {
       track: None,
       playback_info: None,
       disconnect_handle: None,
-      client: None,
+      spirc: None,
       disconnected: false,
-
-      #[cfg(feature = "metrics")]
-      metrics,
     };
 
     let mut instance = Self(Arc::new(RwLock::new(inner)));
-
     instance.create_player(ctx).await?;
 
     let mut call = call.lock().await;
@@ -165,39 +149,31 @@ impl SpoticordSession {
   }
 
   /// Advance to the next track
-  pub async fn next(&mut self) -> Result<(), IpcError> {
-    if let Some(ref client) = self.0.read().await.client {
-      return client.send(IpcPacket::Next);
+  pub async fn next(&mut self) {
+    if let Some(ref spirc) = self.0.read().await.spirc {
+      spirc.next();
     }
-
-    Ok(())
   }
 
   /// Rewind to the previous track
-  pub async fn previous(&mut self) -> Result<(), IpcError> {
-    if let Some(ref client) = self.0.read().await.client {
-      return client.send(IpcPacket::Previous);
+  pub async fn previous(&mut self) {
+    if let Some(ref spirc) = self.0.read().await.spirc {
+      spirc.prev();
     }
-
-    Ok(())
   }
 
   /// Pause the current track
-  pub async fn pause(&mut self) -> Result<(), IpcError> {
-    if let Some(ref client) = self.0.read().await.client {
-      return client.send(IpcPacket::Pause);
+  pub async fn pause(&mut self) {
+    if let Some(ref spirc) = self.0.read().await.spirc {
+      spirc.pause();
     }
-
-    Ok(())
   }
 
   /// Resume the current track
-  pub async fn resume(&mut self) -> Result<(), IpcError> {
-    if let Some(ref client) = self.0.read().await.client {
-      return client.send(IpcPacket::Resume);
+  pub async fn resume(&mut self) {
+    if let Some(ref spirc) = self.0.read().await.spirc {
+      spirc.play();
     }
-
-    Ok(())
   }
 
   async fn create_player(&mut self, ctx: &Context) -> Result<(), SessionCreateError> {
@@ -232,52 +208,17 @@ impl SpoticordSession {
       }
     };
 
-    // Create IPC oneshot server
-    let (server, tx_name, rx_name) = match ipc::Server::create() {
-      Ok(server) => server,
-      Err(why) => {
-        error!("Failed to create IPC server: {:?}", why);
-        return Err(SessionCreateError::ForkError);
-      }
-    };
-
-    // Spawn player process
-    let child =
-      match Command::new(std::env::current_exe().expect("to know the current executable path"))
-        .args([
-          "--player",
-          &tx_name,
-          &rx_name,
-          "--debug-guild-id",
-          &self.guild_id().await.to_string(),
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-      {
-        Ok(child) => child,
-        Err(why) => {
-          error!("Failed to start player process: {:?}", why);
-          return Err(SessionCreateError::ForkError);
-        }
-      };
-
-    // Establish bi-directional IPC channel
-    let client = match server.accept() {
-      Ok(client) => client,
-      Err(why) => {
-        error!("Failed to accept IPC connection: {:?}", why);
-
-        return Err(SessionCreateError::ForkError);
-      }
-    };
-
-    // Pipe player audio to the voice channel
-    let reader = children_to_reader::<f32>(vec![child]);
+    // Create player
+    let mut player = Player::create();
 
     // Create track (paused, fixes audio glitches)
-    let (mut track, track_handle) =
-      create_player(Input::new(true, reader, Codec::Pcm, Container::Raw, None));
+    let (mut track, track_handle) = create_player(Input::new(
+      true,
+      Reader::Extension(Box::new(player.get_stream())),
+      Codec::Pcm,
+      Container::Raw,
+      None,
+    ));
     track.pause();
 
     let call = self.call().await;
@@ -286,11 +227,20 @@ impl SpoticordSession {
     // Set call audio to track
     call.play_only(track);
 
+    let (spirc, (mut player_rx, mut sink_rx)) = match player.start(&token, &user.device_name).await
+    {
+      Ok(v) => v,
+      Err(why) => {
+        error!("Failed to start the player: {:?}", why);
+
+        return Err(SessionCreateError::PlayerStartError);
+      }
+    };
+
     // Handle IPC packets
     // This will automatically quit once the IPC connection is closed
     tokio::spawn({
       let track = track_handle.clone();
-      let client = client.clone();
       let ctx = ctx.clone();
       let instance = self.clone();
       let inner = self.0.clone();
@@ -315,138 +265,228 @@ impl SpoticordSession {
             break;
           }
 
-          let msg = match client.try_recv() {
-            Ok(msg) => msg,
-            Err(why) => {
-              if let TryRecvError::Empty = why {
-                // No message, wait a bit and try again
-                tokio::time::sleep(Duration::from_millis(25)).await;
+          tokio::select! {
+            event = player_rx.recv() => {
+              let Some(event) = event else { break; };
 
-                continue;
-              } else if let TryRecvError::IpcError(IpcError::Disconnected) = &why {
-                trace!("IPC connection closed, exiting IPC handler");
-                break;
+              match event {
+                PlayerEvent::Playing {
+                  play_request_id: _,
+                  track_id,
+                  position_ms,
+                  duration_ms,
+                } => {
+                  let was_none = instance
+                    .update_playback(duration_ms, position_ms, true)
+                    .await;
+
+                  if was_none {
+                    // Stop player if update track fails
+                    if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
+                      error!("Failed to update track: {:?}", why);
+
+                      instance.player_stopped().await;
+                      return;
+                    }
+                  }
+                }
+
+                PlayerEvent::Paused {
+                  play_request_id: _,
+                  track_id,
+                  position_ms,
+                  duration_ms,
+                } => {
+                  instance.start_disconnect_timer().await;
+
+                  let was_none = instance
+                    .update_playback(duration_ms, position_ms, false)
+                    .await;
+
+                  if was_none {
+                    // Stop player if update track fails
+
+                    if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
+                      error!("Failed to update track: {:?}", why);
+
+                      instance.player_stopped().await;
+                      return;
+                    }
+                  }
+                }
+
+                PlayerEvent::Changed {
+                  old_track_id: _,
+                  new_track_id,
+                } => {
+                  let instance = instance.clone();
+                  let ctx = ctx.clone();
+
+                  // Fetch track info
+                  // This is done in a separate task to avoid blocking the IPC handler
+                  tokio::spawn(async move {
+                    if let Err(why) = instance.update_track(&ctx, &owner_id, new_track_id).await {
+                      error!("Failed to update track: {:?}", why);
+
+                      instance.player_stopped().await;
+                    }
+                  });
+                }
+
+                PlayerEvent::Stopped {
+                  play_request_id: _,
+                  track_id: _,
+                } => {
+                  check_result(track.pause());
+
+                  {
+                    let mut inner = inner.write().await;
+                    inner.playback_info.take();
+                  }
+
+                  instance.start_disconnect_timer().await;
+                }
+
+                _ => {}
+              };
+            }
+
+            event = sink_rx.recv() => {
+              let Some(event) = event else { break; };
+
+              let check_result = |result| {
+                if let Err(why) = result {
+                  error!("Failed to issue track command: {:?}", why);
+                }
+              };
+
+
+              match event {
+                SinkEvent::Start => {
+                  check_result(track.play());
+                }
+
+                SinkEvent::Stop => {
+                  check_result(track.pause());
+                }
               }
-
-              error!("Failed to receive IPC message: {:?}", why);
-              break;
             }
           };
 
-          match msg {
-            // Session connect error
-            IpcPacket::ConnectError(why) => {
-              error!("Failed to connect to Spotify: {:?}", why);
+          // match event {
+          //   // Session connect error
+          //   IpcPacket::ConnectError(why) => {
+          //     error!("Failed to connect to Spotify: {:?}", why);
 
-              // Notify the user in the text channel
-              if let Err(why) = instance
-                .text_channel_id()
-                .await
-                .send_message(&instance.http().await, |message| {
-                  message.embed(|embed| {
-                    embed.title("Failed to connect to Spotify");
-                    embed.description(why);
-                    embed.footer(|footer| footer.text("Please try again"));
-                    embed.color(Status::Error as u64);
+          //     // Notify the user in the text channel
+          //     if let Err(why) = instance
+          //       .text_channel_id()
+          //       .await
+          //       .send_message(&instance.http().await, |message| {
+          //         message.embed(|embed| {
+          //           embed.title("Failed to connect to Spotify");
+          //           embed.description(why);
+          //           embed.footer(|footer| footer.text("Please try again"));
+          //           embed.color(Status::Error as u64);
 
-                    embed
-                  });
+          //           embed
+          //         });
 
-                  message
-                })
-                .await
-              {
-                error!("Failed to send error message: {:?}", why);
-              }
+          //         message
+          //       })
+          //       .await
+          //     {
+          //       error!("Failed to send error message: {:?}", why);
+          //     }
 
-              break;
-            }
+          //     break;
+          //   }
 
-            // Sink requests playback to start/resume
-            IpcPacket::StartPlayback => {
-              check_result(track.play());
-            }
+          //   // Sink requests playback to start/resume
+          //   IpcPacket::StartPlayback => {
+          //     check_result(track.play());
+          //   }
 
-            // Sink requests playback to pause
-            IpcPacket::StopPlayback => {
-              check_result(track.pause());
-            }
+          //   // Sink requests playback to pause
+          //   IpcPacket::StopPlayback => {
+          //     check_result(track.pause());
+          //   }
 
-            // A new track has been set by the player
-            IpcPacket::TrackChange(track) => {
-              // Convert to SpotifyId
-              let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
+          //   // A new track has been set by the player
+          //   IpcPacket::TrackChange(track) => {
+          //     // Convert to SpotifyId
+          //     let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
 
-              let instance = instance.clone();
-              let ctx = ctx.clone();
+          //     let instance = instance.clone();
+          //     let ctx = ctx.clone();
 
-              // Fetch track info
-              // This is done in a separate task to avoid blocking the IPC handler
-              tokio::spawn(async move {
-                if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-                  error!("Failed to update track: {:?}", why);
+          //     // Fetch track info
+          //     // This is done in a separate task to avoid blocking the IPC handler
+          //     tokio::spawn(async move {
+          //       if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
+          //         error!("Failed to update track: {:?}", why);
 
-                  instance.player_stopped().await;
-                }
-              });
-            }
+          //         instance.player_stopped().await;
+          //       }
+          //     });
+          //   }
 
-            // The player has started playing a track
-            IpcPacket::Playing(track, position_ms, duration_ms) => {
-              // Convert to SpotifyId
-              let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
+          //   // The player has started playing a track
+          //   IpcPacket::Playing(track, position_ms, duration_ms) => {
+          //     // Convert to SpotifyId
+          //     let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
 
-              let was_none = instance
-                .update_playback(duration_ms, position_ms, true)
-                .await;
+          //     let was_none = instance
+          //       .update_playback(duration_ms, position_ms, true)
+          //       .await;
 
-              if was_none {
-                // Stop player if update track fails
-                if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-                  error!("Failed to update track: {:?}", why);
+          //     if was_none {
+          //       // Stop player if update track fails
+          //       if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
+          //         error!("Failed to update track: {:?}", why);
 
-                  instance.player_stopped().await;
-                  return;
-                }
-              }
-            }
+          //         instance.player_stopped().await;
+          //         return;
+          //       }
+          //     }
+          //   }
 
-            IpcPacket::Paused(track, position_ms, duration_ms) => {
-              instance.start_disconnect_timer().await;
+          //   IpcPacket::Paused(track, position_ms, duration_ms) => {
+          //     instance.start_disconnect_timer().await;
 
-              // Convert to SpotifyId
-              let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
+          //     // Convert to SpotifyId
+          //     let track_id = SpotifyId::from_uri(&track).expect("to be a valid uri");
 
-              let was_none = instance
-                .update_playback(duration_ms, position_ms, false)
-                .await;
+          //     let was_none = instance
+          //       .update_playback(duration_ms, position_ms, false)
+          //       .await;
 
-              if was_none {
-                // Stop player if update track fails
+          //     if was_none {
+          //       // Stop player if update track fails
 
-                if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-                  error!("Failed to update track: {:?}", why);
+          //       if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
+          //         error!("Failed to update track: {:?}", why);
 
-                  instance.player_stopped().await;
-                  return;
-                }
-              }
-            }
+          //         instance.player_stopped().await;
+          //         return;
+          //       }
+          //     }
+          //   }
 
-            IpcPacket::Stopped => {
-              check_result(track.pause());
+          //   IpcPacket::Stopped => {
+          //     check_result(track.pause());
 
-              {
-                let mut inner = inner.write().await;
-                inner.playback_info.take();
-              }
+          //     {
+          //       let mut inner = inner.write().await;
+          //       inner.playback_info.take();
+          //     }
 
-              instance.start_disconnect_timer().await;
-            }
+          //     instance.start_disconnect_timer().await;
+          //   }
 
-            // Ignore other packets
-            _ => {}
-          }
+          //   // Ignore other packets
+          //   _ => {}
+          // }
         }
 
         // Clean up session
@@ -456,15 +496,10 @@ impl SpoticordSession {
       }
     });
 
-    // Inform the player process to connect to Spotify
-    if let Err(why) = client.send(IpcPacket::Connect(token, user.device_name)) {
-      error!("Failed to send IpcPacket::Connect packet: {:?}", why);
-    }
-
     // Update inner client and track
     let mut inner = self.0.write().await;
     inner.track = Some(track_handle);
-    inner.client = Some(client);
+    inner.spirc = Some(spirc);
 
     Ok(())
   }
@@ -537,14 +572,6 @@ impl SpoticordSession {
       pbi.update_track_episode(spotify_id, track, episode);
     }
 
-    // Send track play event to metrics
-    #[cfg(feature = "metrics")]
-    {
-      if let Some(ref pbi) = inner.playback_info {
-        inner.metrics.track_play(pbi);
-      }
-    }
-
     Ok(())
   }
 
@@ -552,15 +579,11 @@ impl SpoticordSession {
   async fn player_stopped(&self) {
     let mut inner = self.0.write().await;
 
-    if let Some(client) = inner.client.take() {
-      // Ask player to quit (will cause defunct process)
-      if let Err(why) = client.send(IpcPacket::Quit) {
-        error!("Failed to send quit packet: {:?}", why);
-      }
+    if let Some(spirc) = inner.spirc.take() {
+      spirc.shutdown();
     }
 
     if let Some(track) = inner.track.take() {
-      // Stop the playback, and freeing the child handle, removing the defunct process
       if let Err(why) = track.stop() {
         error!("Failed to stop track: {:?}", why);
       }
@@ -598,11 +621,7 @@ impl SpoticordSession {
       inner.disconnect_no_abort().await;
     }
 
-    // Stop the disconnect timer, if one is running
-    let mut inner = self.0.write().await;
-    if let Some(handle) = inner.disconnect_handle.take() {
-      handle.abort();
-    }
+    self.stop_disconnect_timer().await;
   }
 
   // Update playback info (duration, position, playing state)
@@ -613,18 +632,24 @@ impl SpoticordSession {
       pbi.is_none()
     };
 
-    let mut inner = self.0.write().await;
+    {
+      let mut inner = self.0.write().await;
 
-    if is_none {
-      inner.playback_info = Some(PlaybackInfo::new(duration_ms, position_ms, playing));
-    } else {
-      // Update position, duration and playback state
-      inner
-        .playback_info
-        .as_mut()
-        .expect("to contain a value")
-        .update_pos_dur(position_ms, duration_ms, playing);
+      if is_none {
+        inner.playback_info = Some(PlaybackInfo::new(duration_ms, position_ms, playing));
+      } else {
+        // Update position, duration and playback state
+        inner
+          .playback_info
+          .as_mut()
+          .expect("to contain a value")
+          .update_pos_dur(position_ms, duration_ms, playing);
+      };
     };
+
+    if playing {
+      self.stop_disconnect_timer().await;
+    }
 
     is_none
   }
@@ -632,17 +657,14 @@ impl SpoticordSession {
   /// Start the disconnect timer, which will disconnect the bot from the voice channel after a
   /// certain amount of time
   async fn start_disconnect_timer(&self) {
+    self.stop_disconnect_timer().await;
+
     let inner_arc = self.0.clone();
     let mut inner = inner_arc.write().await;
 
     // Check if we are already disconnected
     if inner.disconnected {
       return;
-    }
-
-    // Abort the previous timer, if one is running
-    if let Some(handle) = inner.disconnect_handle.take() {
-      handle.abort();
     }
 
     inner.disconnect_handle = Some(tokio::spawn({
@@ -681,6 +703,15 @@ impl SpoticordSession {
     }));
   }
 
+  /// Stop the disconnect timer (if one is running)
+  async fn stop_disconnect_timer(&self) {
+    let mut inner = self.0.write().await;
+    if let Some(handle) = inner.disconnect_handle.take() {
+      handle.abort();
+    }
+  }
+
+  /// Disconnect from the VC and send a message to the text channel
   pub async fn disconnect_with_message(&self, content: &str) {
     {
       let mut inner = self.0.write().await;
@@ -707,12 +738,7 @@ impl SpoticordSession {
     }
 
     // Finally we stop and remove the disconnect timer
-    let mut inner = self.0.write().await;
-
-    // Stop the disconnect timer, if one is running
-    if let Some(handle) = inner.disconnect_handle.take() {
-      handle.abort();
-    }
+    self.stop_disconnect_timer().await;
   }
 
   /* Inner getters */
@@ -767,15 +793,11 @@ impl InnerSpoticordSession {
 
     let mut call = self.call.lock().await;
 
-    if let Some(client) = self.client.take() {
-      // Ask player to quit (will cause defunct process)
-      if let Err(why) = client.send(IpcPacket::Quit) {
-        error!("Failed to send quit packet: {:?}", why);
-      }
+    if let Some(spirc) = self.spirc.take() {
+      spirc.shutdown();
     }
 
     if let Some(track) = self.track.take() {
-      // Stop the playback, and freeing the child handle, removing the defunct process
       if let Err(why) = track.stop() {
         error!("Failed to stop track: {:?}", why);
       }

@@ -28,7 +28,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: ./Dockerfile.metrics
+          file: ./Dockerfile
           tags: |
             ${{ secrets.REGISTRY_URL }}/spoticord/spoticord:latest
           push: ${{ github.ref == 'refs/heads/main' }}

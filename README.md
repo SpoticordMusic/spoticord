@@ -16,7 +16,6 @@ Spoticord uses environment variables to configure itself. The following variable
 
 Additionally you can configure the following variables:
 - `GUILD_ID`: The ID of the Discord server where this bot will create commands for. This is used during testing to prevent the bot from creating slash commands in other servers, as well as getting the commands quicker. This variable is optional, and if not set, the bot will create commands in all servers it is in (this may take up to 15 minutes).
-- `METRICS_URL`: The connection URL of a Prometheus Push Gateway server used for pushing metrics. This variable is required when compiling with the `metrics` feature.
 
 #### Providing environment variables
 You can provide environment variables in a `.env` file at the root of the working directory of Spoticord.

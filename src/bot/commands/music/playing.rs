@@ -280,34 +280,23 @@ pub fn component(ctx: Context, mut interaction: MessageComponentInteraction) -> 
     };
 
     // Send the desired command to the session
-    let success = match interaction.data.custom_id.as_str() {
+    match interaction.data.custom_id.as_str() {
       "playing::btn_pause_play" => {
         if pbi.is_playing {
-          session.pause().await.is_ok()
+          session.pause().await
         } else {
-          session.resume().await.is_ok()
+          session.resume().await
         }
       }
 
-      "playing::btn_previous_track" => session.previous().await.is_ok(),
+      "playing::btn_previous_track" => session.previous().await,
 
-      "playing::btn_next_track" => session.next().await.is_ok(),
+      "playing::btn_next_track" => session.next().await,
 
       _ => {
         error!("Unknown custom_id: {}", interaction.data.custom_id);
-        false
       }
     };
-
-    if !success {
-      error_message(
-        "Cannot change playback state",
-        "An error occurred while trying to change the playback state",
-      )
-      .await;
-
-      return;
-    }
 
     interaction.defer(&ctx.http).await.ok();
     tokio::time::sleep(Duration::from_millis(

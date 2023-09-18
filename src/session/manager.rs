@@ -25,8 +25,8 @@ pub enum SessionCreateError {
   #[error("Failed to join voice channel {0} ({1})")]
   JoinError(ChannelId, GuildId),
 
-  #[error("Failed to start player process")]
-  ForkError,
+  #[error("Failed to start the player")]
+  PlayerStartError,
 }
 
 #[derive(Clone)]
