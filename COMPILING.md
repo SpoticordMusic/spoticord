@@ -71,6 +71,14 @@ If you are actively developing Spoticord, you can use the following command to b
 cargo run
 ```
 
+# Features
+
+As of now, Spoticord has one optional feature: `stats`. This feature enables collecting a few statistics, total and active servers. These statistics will be sent to a redis server, where they then can be read for whatever purpose. If you want to enable this feature, you can do so by running the following command:
+
+```sh
+cargo build [--release] --features metrics
+```
+
 # MSRV
 
 The current minimum supported rust version is `1.65.0`.

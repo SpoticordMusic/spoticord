@@ -7,7 +7,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y cmake
 
 COPY . .
-RUN cargo install --path .
+
+# Remove `--features stats` if you want to deploy without stats collection
+RUN cargo install --path . --features stats
 
 # Runtime
 FROM debian:buster-slim

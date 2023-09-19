@@ -18,6 +18,12 @@ mod player;
 mod session;
 mod utils;
 
+#[cfg(feature = "stats")]
+mod stats;
+
+#[cfg(feature = "stats")]
+use crate::stats::StatsManager;
+
 #[tokio::main]
 async fn main() {
   if std::env::var("RUST_LOG").is_err() {
@@ -51,6 +57,11 @@ async fn main() {
   let token = env::var("DISCORD_TOKEN").expect("a token in the environment");
   let db_url = env::var("DATABASE_URL").expect("a database URL in the environment");
 
+  #[cfg(feature = "stats")]
+  let stats_manager =
+    StatsManager::new(env::var("KV_URL").expect("a redis URL in the environment"))
+      .expect("Failed to connect to redis");
+
   let session_manager = SessionManager::new();
 
   // Create client
@@ -73,7 +84,9 @@ async fn main() {
   }
 
   let shard_manager = client.shard_manager.clone();
-  let _cache = client.cache_and_http.cache.clone();
+
+  #[cfg(feature = "stats")]
+  let cache = client.cache_and_http.cache.clone();
 
   #[cfg(unix)]
   let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
@@ -88,6 +101,22 @@ async fn main() {
   tokio::spawn(async move {
     loop {
       tokio::select! {
+        _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+          #[cfg(feature = "stats")]
+          {
+            let guild_count = cache.guilds().len();
+            let active_count = session_manager.get_active_session_count().await;
+
+            if let Err(why) = stats_manager.set_server_count(guild_count) {
+              error!("Failed to update server count: {why}");
+            }
+
+            if let Err(why) = stats_manager.set_active_count(active_count) {
+              error!("Failed to update active count: {why}");
+            }
+          }
+        }
+
         _ = tokio::signal::ctrl_c() => {
           info!("Received interrupt signal, shutting down...");
 
