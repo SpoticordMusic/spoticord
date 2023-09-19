@@ -9,7 +9,7 @@ use crate::{
   audio::stream::Stream,
   consts::DISCONNECT_TIME,
   database::{Database, DatabaseError},
-  player::Player,
+  player::{Player, PlayerEvent},
   utils::embed::Status,
 };
 use log::*;
@@ -221,17 +221,44 @@ impl SpoticordSession {
     // Set call audio to track
     call.play_only(track);
 
-    let player = match Player::create(stream, &token, &user.device_name, track_handle.clone()).await
-    {
-      Ok(v) => v,
-      Err(why) => {
-        error!("Failed to start the player: {:?}", why);
+    let (player, mut rx) =
+      match Player::create(stream, &token, &user.device_name, track_handle.clone()).await {
+        Ok(v) => v,
+        Err(why) => {
+          error!("Failed to start the player: {:?}", why);
 
-        return Err(SessionCreateError::PlayerStartError);
+          return Err(SessionCreateError::PlayerStartError);
+        }
+      };
+
+    tokio::spawn({
+      let session = self.clone();
+
+      async move {
+        loop {
+          match rx.recv().await {
+            Ok(event) => match event {
+              PlayerEvent::Pause => session.start_disconnect_timer().await,
+              PlayerEvent::Play => session.stop_disconnect_timer().await,
+              PlayerEvent::Stopped => {
+                session.player_stopped().await;
+                break;
+              }
+            },
+            Err(why) => {
+              error!("Communication with player abruptly ended: {why}");
+              session.player_stopped().await;
+
+              break;
+            }
+          }
+        }
       }
-    };
+    });
 
-    // Update inner client and track
+    // Start DC timer by default, as automatic device switching is now gone
+    self.start_disconnect_timer().await;
+
     let mut inner = self.acquire_write().await;
     inner.track = Some(track_handle);
     inner.player = Some(player);
@@ -252,6 +279,11 @@ impl SpoticordSession {
     // Clear owner
     if let Some(owner_id) = inner.owner.take() {
       inner.session_manager.remove_owner(owner_id).await;
+    }
+
+    // Disconnect from Spotify
+    if let Some(player) = inner.player.take() {
+      player.shutdown();
     }
 
     // Unlock to prevent deadlock in start_disconnect_timer
@@ -455,6 +487,11 @@ impl<'a> DerefMut for WriteLock<'a> {
 impl InnerSpoticordSession {
   /// Internal version of disconnect, which does not abort the disconnect timer
   async fn disconnect_no_abort(&mut self) {
+    // Disconnect from Spotify
+    if let Some(player) = self.player.take() {
+      player.shutdown();
+    }
+
     self.disconnected = true;
     self
       .session_manager

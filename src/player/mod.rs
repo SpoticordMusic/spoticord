@@ -12,7 +12,7 @@ use librespot::{
   playback::{
     config::{Bitrate, PlayerConfig, VolumeCtrl},
     mixer::{self, MixerConfig},
-    player::{Player as SpotifyPlayer, PlayerEvent},
+    player::{Player as SpotifyPlayer, PlayerEvent as SpotifyEvent},
   },
   protocol::metadata::{Episode, Track},
 };
@@ -33,7 +33,7 @@ use crate::{
 };
 
 enum Event {
-  Player(PlayerEvent),
+  Player(SpotifyEvent),
   Sink(SinkEvent),
   Command(PlayerCommand),
 }
@@ -44,6 +44,14 @@ enum PlayerCommand {
   Previous,
   Pause,
   Play,
+  Shutdown,
+}
+
+#[derive(Clone, Debug)]
+pub enum PlayerEvent {
+  Pause,
+  Play,
+  Stopped,
 }
 
 #[derive(Clone)]
@@ -59,7 +67,7 @@ impl Player {
     token: &str,
     device_name: &str,
     track: TrackHandle,
-  ) -> Result<Self> {
+  ) -> Result<(Self, Receiver<PlayerEvent>)> {
     let username = utils::spotify::get_username(token).await?;
 
     let player_config = PlayerConfig {
@@ -107,6 +115,7 @@ impl Player {
     );
 
     let (tx, rx) = tokio::sync::broadcast::channel(10);
+    let (tx_ev, rx_ev) = tokio::sync::broadcast::channel(10);
     let pbi = Arc::new(Mutex::new(None));
 
     let player_task = PlayerTask {
@@ -115,6 +124,7 @@ impl Player {
       rx_player,
       rx_sink,
       rx,
+      tx: tx_ev,
       spirc,
       track,
       stream,
@@ -123,7 +133,7 @@ impl Player {
     tokio::spawn(spirc_task);
     tokio::spawn(player_task.run());
 
-    Ok(Self { pbi, tx })
+    Ok((Self { pbi, tx }, rx_ev))
   }
 
   pub fn next(&self) {
@@ -142,6 +152,10 @@ impl Player {
     self.tx.send(PlayerCommand::Play).ok();
   }
 
+  pub fn shutdown(&self) {
+    self.tx.send(PlayerCommand::Shutdown).ok();
+  }
+
   pub async fn pbi(&self) -> Option<PlaybackInfo> {
     self.pbi.lock().await.as_ref().cloned()
   }
@@ -153,9 +167,10 @@ struct PlayerTask {
   spirc: Spirc,
   track: TrackHandle,
 
-  rx_player: UnboundedReceiver<PlayerEvent>,
+  rx_player: UnboundedReceiver<SpotifyEvent>,
   rx_sink: UnboundedReceiver<SinkEvent>,
   rx: Receiver<PlayerCommand>,
+  tx: Sender<PlayerEvent>,
 
   pbi: Arc<Mutex<Option<PlaybackInfo>>>,
 }
@@ -172,7 +187,7 @@ impl PlayerTask {
       match self.next().await {
         // Spotify player events
         Some(Event::Player(event)) => match event {
-          PlayerEvent::Playing {
+          SpotifyEvent::Playing {
             play_request_id: _,
             track_id,
             position_ms,
@@ -181,9 +196,11 @@ impl PlayerTask {
             self
               .update_pbi(track_id, position_ms, duration_ms, true)
               .await;
+
+            self.tx.send(PlayerEvent::Play).ok();
           }
 
-          PlayerEvent::Paused {
+          SpotifyEvent::Paused {
             play_request_id: _,
             track_id,
             position_ms,
@@ -192,9 +209,11 @@ impl PlayerTask {
             self
               .update_pbi(track_id, position_ms, duration_ms, false)
               .await;
+
+            self.tx.send(PlayerEvent::Pause).ok();
           }
 
-          PlayerEvent::Changed {
+          SpotifyEvent::Changed {
             old_track_id: _,
             new_track_id,
           } => {
@@ -207,11 +226,13 @@ impl PlayerTask {
             }
           }
 
-          PlayerEvent::Stopped {
+          SpotifyEvent::Stopped {
             play_request_id: _,
             track_id: _,
           } => {
-            check_result(self.track.stop());
+            check_result(self.track.pause());
+
+            self.tx.send(PlayerEvent::Pause).ok();
           }
 
           _ => {}
@@ -230,6 +251,8 @@ impl PlayerTask {
             // This comes at a cost of more bandwidth, though opus should compress it down to almost nothing
 
             // check_result(track.pause());
+
+            self.tx.send(PlayerEvent::Pause).ok();
           }
         },
 
@@ -239,6 +262,7 @@ impl PlayerTask {
           PlayerCommand::Previous => self.spirc.prev(),
           PlayerCommand::Pause => self.spirc.pause(),
           PlayerCommand::Play => self.spirc.play(),
+          PlayerCommand::Shutdown => break,
         },
 
         None => {
@@ -248,6 +272,8 @@ impl PlayerTask {
         }
       }
     }
+
+    self.tx.send(PlayerEvent::Stopped).ok();
   }
 
   async fn next(&mut self) -> Option<Event> {
