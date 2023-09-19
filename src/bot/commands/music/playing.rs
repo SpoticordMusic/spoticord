@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use librespot::core::spotify_id::{SpotifyAudioType, SpotifyId};
+use librespot::core::spotify_id::SpotifyId;
 use log::error;
 use serenity::{
   builder::{CreateApplicationCommand, CreateButton, CreateComponents, CreateEmbed},
@@ -82,15 +82,6 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
       }
     };
 
-    let spotify_id = match pbi.spotify_id {
-      Some(spotify_id) => spotify_id,
-      None => {
-        not_playing.await;
-
-        return;
-      }
-    };
-
     // Get owner of session
     let owner = match utils::discord::get_user(&ctx, owner).await {
       Some(user) => user,
@@ -119,7 +110,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
     };
 
     // Get metadata
-    let (title, description, audio_type, thumbnail) = get_metadata(spotify_id, &pbi);
+    let (title, description, thumbnail) = get_metadata(&pbi);
 
     if let Err(why) = command
       .create_interaction_response(&ctx.http, |response| {
@@ -129,8 +120,8 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
             message
               .set_embed(build_playing_embed(
                 title,
-                audio_type,
-                spotify_id,
+                pbi.get_type(),
+                pbi.spotify_id,
                 description,
                 owner,
                 thumbnail,
@@ -409,20 +400,7 @@ async fn update_embed(interaction: &mut MessageComponentInteraction, ctx: &Conte
     }
   };
 
-  let spotify_id = match pbi.spotify_id {
-    Some(spotify_id) => spotify_id,
-    None => {
-      error_edit(
-        "Cannot change playback state",
-        "I'm currently not playing any music in this server",
-      )
-      .await;
-
-      return;
-    }
-  };
-
-  let (title, description, audio_type, thumbnail) = get_metadata(spotify_id, &pbi);
+  let (title, description, thumbnail) = get_metadata(&pbi);
 
   if let Err(why) = interaction
     .message
@@ -430,8 +408,8 @@ async fn update_embed(interaction: &mut MessageComponentInteraction, ctx: &Conte
       message
         .set_embed(build_playing_embed(
           title,
-          audio_type,
-          spotify_id,
+          pbi.get_type(),
+          pbi.spotify_id,
           description,
           owner,
           thumbnail,
@@ -477,20 +455,9 @@ fn build_playing_embed(
   embed
 }
 
-fn get_metadata(spotify_id: SpotifyId, pbi: &PlaybackInfo) -> (String, String, String, String) {
-  // Get audio type
-  let audio_type = if spotify_id.audio_type == SpotifyAudioType::Track {
-    "track"
-  } else {
-    "episode"
-  };
-
+fn get_metadata(pbi: &PlaybackInfo) -> (String, String, String) {
   // Create title
-  let title = format!(
-    "{} - {}",
-    pbi.get_artists().as_deref().unwrap_or("ID"),
-    pbi.get_name().as_deref().unwrap_or("ID")
-  );
+  let title = format!("{} - {}", pbi.get_artists(), pbi.get_name());
 
   // Create description
   let mut description = String::new();
@@ -518,5 +485,5 @@ fn get_metadata(spotify_id: SpotifyId, pbi: &PlaybackInfo) -> (String, String, S
   // Get the thumbnail image
   let thumbnail = pbi.get_thumbnail_url().expect("to contain a value");
 
-  (title, description, audio_type.to_string(), thumbnail)
+  (title, description, thumbnail)
 }

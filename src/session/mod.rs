@@ -6,16 +6,11 @@ use self::{
   pbi::PlaybackInfo,
 };
 use crate::{
-  audio::SinkEvent,
+  audio::stream::Stream,
   consts::DISCONNECT_TIME,
   database::{Database, DatabaseError},
   player::Player,
-  utils::{embed::Status, spotify},
-};
-use librespot::{
-  connect::spirc::Spirc,
-  core::spotify_id::{SpotifyAudioType, SpotifyId},
-  playback::player::PlayerEvent,
+  utils::embed::Status,
 };
 use log::*;
 use serenity::{
@@ -31,7 +26,6 @@ use songbird::{
   Call, Event, EventContext, EventHandler,
 };
 use std::{
-  io::Write,
   ops::{Deref, DerefMut},
   sync::Arc,
   time::Duration,
@@ -53,14 +47,9 @@ struct InnerSpoticordSession {
 
   call: Arc<Mutex<Call>>,
   track: Option<TrackHandle>,
-
-  playback_info: Option<PlaybackInfo>,
+  player: Option<Player>,
 
   disconnect_handle: Option<tokio::task::JoinHandle<()>>,
-
-  spirc: Option<Spirc>,
-
-  player: Option<Player>,
 
   /// Whether the session has been disconnected
   /// If this is true then this instance should no longer be used and dropped
@@ -101,10 +90,8 @@ impl SpoticordSession {
       session_manager: session_manager.clone(),
       call: call.clone(),
       track: None,
-      playback_info: None,
-      disconnect_handle: None,
-      spirc: None,
       player: None,
+      disconnect_handle: None,
       disconnected: false,
     };
 
@@ -157,29 +144,29 @@ impl SpoticordSession {
 
   /// Advance to the next track
   pub async fn next(&mut self) {
-    if let Some(ref spirc) = self.acquire_read().await.spirc {
-      spirc.next();
+    if let Some(ref player) = self.acquire_read().await.player {
+      player.next();
     }
   }
 
   /// Rewind to the previous track
   pub async fn previous(&mut self) {
-    if let Some(ref spirc) = self.acquire_read().await.spirc {
-      spirc.prev();
+    if let Some(ref player) = self.acquire_read().await.player {
+      player.prev();
     }
   }
 
   /// Pause the current track
   pub async fn pause(&mut self) {
-    if let Some(ref spirc) = self.acquire_read().await.spirc {
-      spirc.pause();
+    if let Some(ref player) = self.acquire_read().await.player {
+      player.pause();
     }
   }
 
   /// Resume the current track
   pub async fn resume(&mut self) {
-    if let Some(ref spirc) = self.acquire_read().await.spirc {
-      spirc.play();
+    if let Some(ref player) = self.acquire_read().await.player {
+      player.play();
     }
   }
 
@@ -215,13 +202,13 @@ impl SpoticordSession {
       }
     };
 
-    // Create player
-    let mut player = Player::create();
+    // Create stream
+    let stream = Stream::new();
 
     // Create track (paused, fixes audio glitches)
     let (mut track, track_handle) = create_player(Input::new(
       true,
-      Reader::Extension(Box::new(player.get_stream())),
+      Reader::Extension(Box::new(stream.clone())),
       Codec::Pcm,
       Container::Raw,
       None,
@@ -234,7 +221,7 @@ impl SpoticordSession {
     // Set call audio to track
     call.play_only(track);
 
-    let (spirc, (mut player_rx, mut sink_rx)) = match player.start(&token, &user.device_name).await
+    let player = match Player::create(stream, &token, &user.device_name, track_handle.clone()).await
     {
       Ok(v) => v,
       Err(why) => {
@@ -244,230 +231,10 @@ impl SpoticordSession {
       }
     };
 
-    // Handle events
-    tokio::spawn({
-      let track = track_handle.clone();
-      let ctx = ctx.clone();
-      let instance = self.clone();
-      let inner = self.0.clone();
-
-      async move {
-        let check_result = |result| {
-          if let Err(why) = result {
-            error!("Failed to issue track command: {:?}", why);
-          }
-        };
-
-        loop {
-          // Required for IpcPacket::TrackChange to work
-          tokio::task::yield_now().await;
-
-          // Check if the session has been disconnected
-          let disconnected = {
-            let inner = inner.read().await;
-            inner.disconnected
-          };
-          if disconnected {
-            break;
-          }
-
-          tokio::select! {
-            event = player_rx.recv() => {
-              let Some(event) = event else { break; };
-
-              match event {
-                PlayerEvent::Playing {
-                  play_request_id: _,
-                  track_id,
-                  position_ms,
-                  duration_ms,
-                } => {
-                  let was_none = instance
-                    .update_playback(duration_ms, position_ms, true)
-                    .await;
-
-                  if was_none {
-                    // Stop player if update track fails
-                    if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-                      error!("Failed to update track: {:?}", why);
-
-                      instance.player_stopped().await;
-                      return;
-                    }
-                  }
-                }
-
-                PlayerEvent::Paused {
-                  play_request_id: _,
-                  track_id,
-                  position_ms,
-                  duration_ms,
-                } => {
-                  instance.start_disconnect_timer().await;
-
-                  let was_none = instance
-                    .update_playback(duration_ms, position_ms, false)
-                    .await;
-
-                  if was_none {
-                    // Stop player if update track fails
-
-                    if let Err(why) = instance.update_track(&ctx, &owner_id, track_id).await {
-                      error!("Failed to update track: {:?}", why);
-
-                      instance.player_stopped().await;
-                      return;
-                    }
-                  }
-                }
-
-                PlayerEvent::Changed {
-                  old_track_id: _,
-                  new_track_id,
-                } => {
-                  let instance = instance.clone();
-                  let ctx = ctx.clone();
-
-                  // Fetch track info
-                  // This is done in a separate task to avoid blocking the IPC handler
-                  tokio::spawn(async move {
-                    if let Err(why) = instance.update_track(&ctx, &owner_id, new_track_id).await {
-                      error!("Failed to update track: {:?}", why);
-
-                      instance.player_stopped().await;
-                    }
-                  });
-                }
-
-                PlayerEvent::Stopped {
-                  play_request_id: _,
-                  track_id: _,
-                } => {
-                  check_result(track.pause());
-
-                  {
-                    let mut inner = inner.write().await;
-                    inner.playback_info.take();
-                  }
-
-                  instance.start_disconnect_timer().await;
-                }
-
-                _ => {}
-              };
-            }
-
-            event = sink_rx.recv() => {
-              let Some(event) = event else { break; };
-
-              let check_result = |result| {
-                if let Err(why) = result {
-                  error!("Failed to issue track command: {:?}", why);
-                }
-              };
-
-
-              match event {
-                SinkEvent::Start => {
-                  check_result(track.play());
-                }
-
-                SinkEvent::Stop => {
-                  // EXPERIMENT: It may be beneficial to *NOT* pause songbird here
-                  // We already have a fallback if no audio is present in the buffer (write all zeroes aka silence)
-                  // So commenting this out may help prevent a substantial portion of jitter
-                  // This comes at a cost of more bandwidth, though opus should compress it down to almost nothing
-
-                  // check_result(track.pause());
-                }
-              }
-            }
-          };
-        }
-
-        // Clean up session
-        if !inner.read().await.disconnected {
-          instance.player_stopped().await;
-        }
-      }
-    });
-
     // Update inner client and track
     let mut inner = self.acquire_write().await;
     inner.track = Some(track_handle);
-    inner.spirc = Some(spirc);
     inner.player = Some(player);
-
-    Ok(())
-  }
-
-  /// Update current track
-  async fn update_track(
-    &self,
-    ctx: &Context,
-    owner_id: &UserId,
-    spotify_id: SpotifyId,
-  ) -> Result<(), String> {
-    let should_update = {
-      let pbi = self.playback_info().await;
-
-      if let Some(pbi) = pbi {
-        pbi.spotify_id.is_none() || pbi.spotify_id != Some(spotify_id)
-      } else {
-        false
-      }
-    };
-
-    if !should_update {
-      return Ok(());
-    }
-
-    let data = ctx.data.read().await;
-    let database = data.get::<Database>().expect("to contain a value");
-
-    let token = match database.get_access_token(&owner_id.to_string()).await {
-      Ok(token) => token,
-      Err(why) => {
-        error!("Failed to get access token: {:?}", why);
-        return Err("Failed to get access token".to_string());
-      }
-    };
-
-    let mut track: Option<spotify::Track> = None;
-    let mut episode: Option<spotify::Episode> = None;
-
-    if spotify_id.audio_type == SpotifyAudioType::Track {
-      let track_info = match spotify::get_track_info(&token, spotify_id).await {
-        Ok(track) => track,
-        Err(why) => {
-          error!("Failed to get track info: {:?}", why);
-          return Err("Failed to get track info".to_string());
-        }
-      };
-
-      trace!("Received track info: {:?}", track_info);
-
-      track = Some(track_info);
-    } else if spotify_id.audio_type == SpotifyAudioType::Podcast {
-      let episode_info = match spotify::get_episode_info(&token, spotify_id).await {
-        Ok(episode) => episode,
-        Err(why) => {
-          error!("Failed to get episode info: {:?}", why);
-          return Err("Failed to get episode info".to_string());
-        }
-      };
-
-      trace!("Received episode info: {:?}", episode_info);
-
-      episode = Some(episode_info);
-    }
-
-    // Update track/episode
-    let mut inner = self.acquire_write().await;
-
-    if let Some(pbi) = inner.playback_info.as_mut() {
-      pbi.update_track_episode(spotify_id, track, episode);
-    }
 
     Ok(())
   }
@@ -475,10 +242,6 @@ impl SpoticordSession {
   /// Called when the player must stop, but not leave the call
   async fn player_stopped(&self) {
     let mut inner = self.acquire_write().await;
-
-    if let Some(spirc) = inner.spirc.take() {
-      spirc.shutdown();
-    }
 
     if let Some(track) = inner.track.take() {
       if let Err(why) = track.stop() {
@@ -490,9 +253,6 @@ impl SpoticordSession {
     if let Some(owner_id) = inner.owner.take() {
       inner.session_manager.remove_owner(owner_id).await;
     }
-
-    // Clear playback info
-    inner.playback_info = None;
 
     // Unlock to prevent deadlock in start_disconnect_timer
     drop(inner);
@@ -521,42 +281,11 @@ impl SpoticordSession {
     self.stop_disconnect_timer().await;
   }
 
-  // Update playback info (duration, position, playing state)
-  async fn update_playback(&self, duration_ms: u32, position_ms: u32, playing: bool) -> bool {
-    let is_none = {
-      let pbi = self.playback_info().await;
-
-      pbi.is_none()
-    };
-
-    {
-      let mut inner = self.acquire_write().await;
-
-      if is_none {
-        inner.playback_info = Some(PlaybackInfo::new(duration_ms, position_ms, playing));
-      } else {
-        // Update position, duration and playback state
-        inner
-          .playback_info
-          .as_mut()
-          .expect("to contain a value")
-          .update_pos_dur(position_ms, duration_ms, playing);
-      };
-    };
-
-    if playing {
-      self.stop_disconnect_timer().await;
-    }
-
-    is_none
-  }
-
   /// Start the disconnect timer, which will disconnect the bot from the voice channel after a
   /// certain amount of time
   async fn start_disconnect_timer(&self) {
     self.stop_disconnect_timer().await;
 
-    let arc_handle = self.0.clone();
     let mut inner = self.acquire_write().await;
 
     // Check if we are already disconnected
@@ -565,8 +294,7 @@ impl SpoticordSession {
     }
 
     inner.disconnect_handle = Some(tokio::spawn({
-      let inner = arc_handle.clone();
-      let instance = self.clone();
+      let session = self.clone();
 
       async move {
         let mut timer = tokio::time::interval(Duration::from_secs(DISCONNECT_TIME));
@@ -578,19 +306,15 @@ impl SpoticordSession {
         // Make sure this task has not been aborted, if it has this will automatically stop execution.
         tokio::task::yield_now().await;
 
-        let is_playing = {
-          let inner = inner.read().await;
-
-          if let Some(ref pbi) = inner.playback_info {
-            pbi.is_playing
-          } else {
-            false
-          }
-        };
+        let is_playing = session
+          .playback_info()
+          .await
+          .map(|pbi| pbi.is_playing)
+          .unwrap_or(false);
 
         if !is_playing {
           info!("Player is not playing, disconnecting");
-          instance
+          session
             .disconnect_with_message(
               "The player has been inactive for too long, and has been disconnected.",
             )
@@ -668,7 +392,10 @@ impl SpoticordSession {
 
   /// Get the playback info
   pub async fn playback_info(&self) -> Option<PlaybackInfo> {
-    self.acquire_read().await.playback_info.clone()
+    let handle = self.acquire_read().await;
+    let player = handle.player.as_ref()?;
+
+    player.pbi().await
   }
 
   pub async fn call(&self) -> Arc<Mutex<Call>> {
@@ -728,11 +455,6 @@ impl<'a> DerefMut for WriteLock<'a> {
 impl InnerSpoticordSession {
   /// Internal version of disconnect, which does not abort the disconnect timer
   async fn disconnect_no_abort(&mut self) {
-    // Flush stream so that it is not permanently blocking the thread
-    if let Some(player) = self.player.take() {
-      player.get_stream().flush().ok();
-    }
-
     self.disconnected = true;
     self
       .session_manager
@@ -740,10 +462,6 @@ impl InnerSpoticordSession {
       .await;
 
     let mut call = self.call.lock().await;
-
-    if let Some(spirc) = self.spirc.take() {
-      spirc.shutdown();
-    }
 
     if let Some(track) = self.track.take() {
       if let Err(why) = track.stop() {

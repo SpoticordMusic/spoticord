@@ -12,10 +12,13 @@ path = "src/main.rs"
 stats = ["redis"]
 
 [dependencies]
+anyhow = "1.0.75"
 dotenv = "0.15.0"
 env_logger = "0.10.0"
+hex = "0.4.3"
 librespot = { version = "0.4.2", default-features = false }
 log = "0.4.20"
+protobuf = "2.28.0"
 redis = { version = "0.23.3", optional = true }
 reqwest = "0.11.20"
 samplerate = "0.2.4"
