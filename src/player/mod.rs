@@ -221,7 +221,7 @@ impl PlayerTask {
               let mut pbi = self.pbi.lock().await;
 
               if let Some(pbi) = pbi.as_mut() {
-                pbi.update_track(current);
+                pbi.update_track(new_track_id, current);
               }
             }
           }
@@ -317,7 +317,7 @@ impl PlayerTask {
     if let Ok(current) = self.resolve_audio_info(spotify_id).await {
       match pbi.as_mut() {
         Some(pbi) => {
-          pbi.update_track(current);
+          pbi.update_track(spotify_id, current);
           pbi.update_pos_dur(position_ms, duration_ms, true);
         }
         None => {

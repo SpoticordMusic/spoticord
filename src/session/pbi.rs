@@ -52,7 +52,8 @@ impl PlaybackInfo {
   }
 
   /// Update spotify id, track and episode
-  pub fn update_track(&mut self, track: CurrentTrack) {
+  pub fn update_track(&mut self, spotify_id: SpotifyId, track: CurrentTrack) {
+    self.spotify_id = spotify_id;
     self.track = track;
   }
 
