@@ -338,7 +338,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
         .title("Connected to voice channel")
         .icon_url("https://spoticord.com/speaker.png")
         .description(format!("Come listen along in <#{}>", channel_id))
-        .footer("Spotify will automatically start playing on Spoticord")
+        .footer("You must manually go to Spotify and select your device")
         .status(Status::Info)
         .build(),
     )

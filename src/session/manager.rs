@@ -25,8 +25,8 @@ pub enum SessionCreateError {
   #[error("Failed to join voice channel {0} ({1})")]
   JoinError(ChannelId, GuildId),
 
-  #[error("Failed to start player process")]
-  ForkError,
+  #[error("Failed to start the player")]
+  PlayerStartError,
 }
 
 #[derive(Clone)]
@@ -115,6 +115,10 @@ impl InnerSessionManager {
 
     count
   }
+
+  pub fn sessions(&self) -> Vec<SpoticordSession> {
+    self.sessions.values().cloned().collect()
+  }
 }
 
 impl SessionManager {
@@ -182,5 +186,14 @@ impl SessionManager {
   #[allow(dead_code)]
   pub async fn get_active_session_count(&self) -> usize {
     self.0.read().await.get_active_session_count().await
+  }
+
+  /// Tell all sessions to instantly shut down
+  pub async fn shutdown(&self) {
+    let sessions = self.0.read().await.sessions();
+
+    for session in sessions {
+      session.disconnect().await;
+    }
   }
 }

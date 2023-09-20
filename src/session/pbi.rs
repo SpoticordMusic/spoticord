@@ -1,28 +1,41 @@
-use librespot::core::spotify_id::SpotifyId;
+use librespot::{
+  core::spotify_id::SpotifyId,
+  protocol::metadata::{Episode, Track},
+};
 
-use crate::utils::{self, spotify};
+use crate::utils;
 
 #[derive(Clone)]
 pub struct PlaybackInfo {
   last_updated: u128,
   position_ms: u32,
 
-  pub track: Option<spotify::Track>,
-  pub episode: Option<spotify::Episode>,
-  pub spotify_id: Option<SpotifyId>,
+  pub track: CurrentTrack,
+  pub spotify_id: SpotifyId,
 
   pub duration_ms: u32,
   pub is_playing: bool,
 }
 
+#[derive(Clone)]
+pub enum CurrentTrack {
+  Track(Track),
+  Episode(Episode),
+}
+
 impl PlaybackInfo {
   /// Create a new instance of PlaybackInfo
-  pub fn new(duration_ms: u32, position_ms: u32, is_playing: bool) -> Self {
+  pub fn new(
+    duration_ms: u32,
+    position_ms: u32,
+    is_playing: bool,
+    track: CurrentTrack,
+    spotify_id: SpotifyId,
+  ) -> Self {
     Self {
       last_updated: utils::get_time_ms(),
-      track: None,
-      episode: None,
-      spotify_id: None,
+      track,
+      spotify_id,
       duration_ms,
       position_ms,
       is_playing,
@@ -39,15 +52,9 @@ impl PlaybackInfo {
   }
 
   /// Update spotify id, track and episode
-  pub fn update_track_episode(
-    &mut self,
-    spotify_id: SpotifyId,
-    track: Option<spotify::Track>,
-    episode: Option<spotify::Episode>,
-  ) {
-    self.spotify_id = Some(spotify_id);
+  pub fn update_track(&mut self, spotify_id: SpotifyId, track: CurrentTrack) {
+    self.spotify_id = spotify_id;
     self.track = track;
-    self.episode = episode;
   }
 
   /// Get the current playback position
@@ -63,71 +70,73 @@ impl PlaybackInfo {
   }
 
   /// Get the name of the track or episode
-  pub fn get_name(&self) -> Option<String> {
-    if let Some(track) = &self.track {
-      Some(track.name.clone())
-    } else {
-      self.episode.as_ref().map(|episode| episode.name.clone())
+  pub fn get_name(&self) -> String {
+    match &self.track {
+      CurrentTrack::Track(track) => track.get_name().to_string(),
+      CurrentTrack::Episode(episode) => episode.get_name().to_string(),
     }
   }
 
   /// Get the artist(s) or show name of the current track
-  pub fn get_artists(&self) -> Option<String> {
-    if let Some(track) = &self.track {
-      Some(
-        track
-          .artists
-          .iter()
-          .map(|a| a.name.clone())
-          .collect::<Vec<String>>()
-          .join(", "),
-      )
-    } else {
-      self
-        .episode
-        .as_ref()
-        .map(|episode| episode.show.name.clone())
+  pub fn get_artists(&self) -> String {
+    match &self.track {
+      CurrentTrack::Track(track) => track
+        .get_artist()
+        .iter()
+        .map(|a| a.get_name().to_string())
+        .collect::<Vec<_>>()
+        .join(", "),
+      CurrentTrack::Episode(episode) => episode.get_show().get_name().to_string(),
     }
   }
 
   /// Get the album art url
   pub fn get_thumbnail_url(&self) -> Option<String> {
-    if let Some(track) = &self.track {
-      let mut images = track.album.images.clone();
-      images.sort_by(|a, b| b.width.cmp(&a.width));
+    let file_id = match &self.track {
+      CurrentTrack::Track(track) => {
+        let mut images = track.get_album().get_cover_group().get_image().to_vec();
+        images.sort_by_key(|b| std::cmp::Reverse(b.get_width()));
 
-      images.get(0).as_ref().map(|image| image.url.clone())
-    } else if let Some(episode) = &self.episode {
-      let mut images = episode.show.images.clone();
-      images.sort_by(|a, b| b.width.cmp(&a.width));
+        images
+          .get(0)
+          .as_ref()
+          .map(|image| image.get_file_id())
+          .map(hex::encode)
+      }
+      CurrentTrack::Episode(episode) => {
+        let mut images = episode.get_covers().get_image().to_vec();
+        images.sort_by_key(|b| std::cmp::Reverse(b.get_width()));
 
-      images.get(0).as_ref().map(|image| image.url.clone())
-    } else {
-      None
-    }
+        images
+          .get(0)
+          .as_ref()
+          .map(|image| image.get_file_id())
+          .map(hex::encode)
+      }
+    };
+
+    file_id.map(|id| format!("https://i.scdn.co/image/{id}"))
   }
 
   /// Get the type of audio (track or episode)
   #[allow(dead_code)]
-  pub fn get_type(&self) -> Option<String> {
-    if self.track.is_some() {
-      Some("track".into())
-    } else if self.episode.is_some() {
-      Some("episode".into())
-    } else {
-      None
+  pub fn get_type(&self) -> String {
+    match &self.track {
+      CurrentTrack::Track(_) => "track".to_string(),
+      CurrentTrack::Episode(_) => "episode".to_string(),
     }
   }
 
   /// Get the public facing url of the track or episode
   #[allow(dead_code)]
   pub fn get_url(&self) -> Option<&str> {
-    if let Some(ref track) = self.track {
-      Some(track.external_urls.spotify.as_str())
-    } else if let Some(ref episode) = self.episode {
-      Some(episode.external_urls.spotify.as_str())
-    } else {
-      None
+    match &self.track {
+      CurrentTrack::Track(track) => track
+        .get_external_id()
+        .iter()
+        .find(|id| id.get_typ() == "spotify")
+        .map(|v| v.get_id()),
+      CurrentTrack::Episode(episode) => Some(episode.get_external_url()),
     }
   }
 }
