@@ -1,5 +1,5 @@
 # Builder
-FROM rust:1.65-buster as builder
+FROM rust:1.72.1-buster as builder
 
 WORKDIR /app
 
