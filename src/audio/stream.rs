@@ -38,6 +38,7 @@ impl Read for Stream {
     }
 
     let max_read = usize::min(buf.len(), buffer.len());
+
     buf[0..max_read].copy_from_slice(&buffer[0..max_read]);
     buffer.drain(0..max_read);
     condvar.notify_all();

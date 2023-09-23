@@ -231,49 +231,74 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
       }
     }
 
-    if let Some(session) = session_opt.as_mut() {
-      if let Err(why) = session.update_owner(&ctx, command.user.id).await {
-        // Need to link first
-        if let SessionCreateError::NoSpotify = why {
-          update_message(
-            &ctx,
-            &command,
-            EmbedBuilder::new()
-              .title("Cannot join voice channel")
-              .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
-              .status(Status::Error)
-              .build(),
-          )
-          .await;
+    macro_rules! report_error {
+      ($why:ident) => {
+        match $why {
+          // User has not linked their account
+          SessionCreateError::NoSpotify => {
+            update_message(
+              &ctx,
+              &command,
+              EmbedBuilder::new()
+                .title("Cannot join voice channel")
+                .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
+                .status(Status::Error)
+                .build(),
+            )
+            .await;
+          }
 
-          return;
-        } else if let SessionCreateError::SpotifyExpired = why {
-          update_message(
-            &ctx,
-            &command,
-            EmbedBuilder::new()
-              .title("Cannot join voice channel")
-              .description("Spoticord no longer has access to your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to relink your Spotify account.")
-              .status(Status::Error)
-              .build(),
-          ).await;
+          // Spotify credentials have expired or are invalid
+          SessionCreateError::SpotifyExpired => {
+            update_message(
+              &ctx,
+              &command,
+              EmbedBuilder::new()
+                .title("Cannot join voice channel")
+                .description("Spoticord no longer has access to your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to relink your Spotify account.")
+                .status(Status::Error)
+                .build(),
+            ).await;
+          }
 
-          return;
+          // Songbird error
+          SessionCreateError::JoinError(why) => {
+            update_message(
+              &ctx,
+              &command,
+              EmbedBuilder::new()
+                .title("Cannot join voice channel")
+                .description(format!(
+                  "An error occured while joining the channel. Please try running </join:1036714850367320142> again.\n\nError details: `{why}`"
+                ))
+                .status(Status::Error)
+                .build(),
+            )
+            .await;
+          }
+
+          // Any other error
+          _ => {
+            update_message(
+              &ctx,
+              &command,
+              EmbedBuilder::new()
+                .title("Cannot join voice channel")
+                .description("An error occured while joining the channel. Please try again later.")
+                .status(Status::Error)
+                .build(),
+            )
+            .await;
+          }
         }
 
-        // Any other error
-        update_message(
-          &ctx,
-          &command,
-          EmbedBuilder::new()
-            .title("Cannot join voice channel")
-            .description("An error occured while joining the channel. Please try again later.")
-            .status(Status::Error)
-            .build(),
-        )
-        .await;
-
         return;
+      };
+    }
+
+    if let Some(session) = session_opt.as_mut() {
+      if let Err(why) = session.update_owner(&ctx, command.user.id).await {
+        report_error!(why);
       }
     } else {
       // Create the session, and handle potential errors
@@ -287,47 +312,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
         )
         .await
       {
-        // Need to link first
-        if let SessionCreateError::NoSpotify = why {
-          update_message(
-            &ctx,
-            &command,
-            EmbedBuilder::new()
-              .title("Cannot join voice channel")
-              .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
-              .status(Status::Error)
-              .build(),
-          )
-          .await;
-
-          return;
-        } else if let SessionCreateError::SpotifyExpired = why {
-          update_message(
-            &ctx,
-            &command,
-            EmbedBuilder::new()
-              .title("Cannot join voice channel")
-              .description("Spoticord no longer has access to your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to relink your Spotify account.")
-              .status(Status::Error)
-              .build(),
-          ).await;
-
-          return;
-        }
-
-        // Any other error
-        update_message(
-          &ctx,
-          &command,
-          EmbedBuilder::new()
-            .title("Cannot join voice channel")
-            .description("An error occured while joining the channel. Please try again later.")
-            .status(Status::Error)
-            .build(),
-        )
-        .await;
-
-        return;
+        report_error!(why);
       };
     }
 

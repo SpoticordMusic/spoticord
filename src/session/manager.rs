@@ -4,6 +4,7 @@ use serenity::{
   model::prelude::{ChannelId, GuildId, UserId},
   prelude::{Context, TypeMapKey},
 };
+use songbird::error::JoinError;
 use thiserror::Error;
 
 use super::SpoticordSession;
@@ -22,8 +23,8 @@ pub enum SessionCreateError {
   #[error("An error has occured while communicating with the database")]
   DatabaseError,
 
-  #[error("Failed to join voice channel {0} ({1})")]
-  JoinError(ChannelId, GuildId),
+  #[error("Failed to join voice channel")]
+  JoinError(JoinError),
 
   #[error("Failed to start the player")]
   PlayerStartError,

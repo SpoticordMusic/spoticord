@@ -13,6 +13,7 @@ use crate::{
   utils::embed::Status,
 };
 use log::*;
+use reqwest::StatusCode;
 use serenity::{
   async_trait,
   http::Http,
@@ -78,7 +79,7 @@ impl SpoticordSession {
 
     if let Err(why) = result {
       error!("Error joining voice channel: {:?}", why);
-      return Err(SessionCreateError::JoinError(channel_id, guild_id));
+      return Err(SessionCreateError::JoinError(why));
     }
 
     let inner = InnerSpoticordSession {
@@ -182,15 +183,15 @@ impl SpoticordSession {
     let token = match database.get_access_token(owner_id.to_string()).await {
       Ok(token) => token,
       Err(why) => {
-        if let DatabaseError::InvalidStatusCode(code) = why {
-          if code == 404 {
-            return Err(SessionCreateError::NoSpotify);
-          } else if code == 400 {
-            return Err(SessionCreateError::SpotifyExpired);
+        return match why {
+          DatabaseError::InvalidStatusCode(StatusCode::NOT_FOUND) => {
+            Err(SessionCreateError::NoSpotify)
           }
-        }
-
-        return Err(SessionCreateError::DatabaseError);
+          DatabaseError::InvalidStatusCode(StatusCode::BAD_REQUEST) => {
+            Err(SessionCreateError::SpotifyExpired)
+          }
+          _ => Err(SessionCreateError::DatabaseError),
+        };
       }
     };
 
@@ -209,7 +210,7 @@ impl SpoticordSession {
     let (mut track, track_handle) = create_player(Input::new(
       true,
       Reader::Extension(Box::new(stream.clone())),
-      Codec::Pcm,
+      Codec::FloatPcm,
       Container::Raw,
       None,
     ));
