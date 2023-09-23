@@ -53,7 +53,9 @@ impl Sink for StreamSink {
   fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
     use zerocopy::AsBytes;
 
-    let AudioPacket::Samples(samples) = packet else { return Ok(()); };
+    let AudioPacket::Samples(samples) = packet else {
+      return Ok(());
+    };
     let samples_f32: &[f32] = &converter.f64_to_f32(&samples);
 
     let resampled = samplerate::convert(
@@ -65,10 +67,7 @@ impl Sink for StreamSink {
     )
     .expect("to succeed");
 
-    let samples_i16 =
-      &converter.f64_to_s16(&resampled.iter().map(|v| *v as f64).collect::<Vec<f64>>());
-
-    self.write_bytes(samples_i16.as_bytes())?;
+    self.write_bytes(resampled.as_bytes())?;
 
     Ok(())
   }
