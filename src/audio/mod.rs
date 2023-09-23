@@ -67,9 +67,6 @@ impl Sink for StreamSink {
     )
     .expect("to succeed");
 
-    // let samples_i16 =
-    //   &converter.f64_to_s16(&resampled.iter().map(|v| *v as f64).collect::<Vec<f64>>());
-
     self.write_bytes(resampled.as_bytes())?;
 
     Ok(())
