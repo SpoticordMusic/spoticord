@@ -8,13 +8,14 @@ on:
     branches: [ "main", "dev" ]
   workflow_dispatch:
 
-permissions:
-  packages: write
-
 jobs:
   build-and-push:
     name: Build Docker image and push to registry
     runs-on: ubuntu-latest
+    
+    permissions:
+      packages: write
+      contents: read
 
     steps:
       - name: Checkout code
