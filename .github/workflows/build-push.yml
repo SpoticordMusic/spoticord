@@ -32,13 +32,17 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: Entepotenz/change-string-case-action@v1 # https://github.com/orgs/community/discussions/10553
+        id: repo-uri-string
+        with:
+          string: ghcr.io/${{ github.repository }}
+
       - name: Generate image metadata
-        id: spoticord # used in next step
+        id: docker-meta # used in next step
         uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
-          images: |
-            ghcr.io/${{ github.repository }}
+          images: ${{ steps.repo-uri-string.outputs.lowercase }}
           # Docker tags based on the following events/attributes
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
@@ -55,8 +59,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.spoticord.outputs.tags }}
-          labels: ${{ steps.spoticord.outputs.labels }}
+          tags: ${{ steps.docker-meta.outputs.tags }}
+          labels: ${{ steps.docker-meta.outputs.labels }}
           # Some basic caching of the layers...
-          cache-from: ghcr.io/${{ github.repository }}:latest-cache
-          cache-to: ghcr.io/${{ github.repository }}:latest-cache
+          cache-from: ${{ steps.repo-uri-string.outputs.lowercase }}:latest-cache
+          cache-to: ${{ steps.repo-uri-string.outputs.lowercase }}:latest-cache
