@@ -85,9 +85,6 @@ async fn main() {
 
   let shard_manager = client.shard_manager.clone();
 
-  #[cfg(feature = "stats")]
-  let cache = client.cache_and_http.cache.clone();
-
   #[cfg(unix)]
   let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
     tokio::signal::unix::signal(SignalKind::terminate())
@@ -104,12 +101,7 @@ async fn main() {
         _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
           #[cfg(feature = "stats")]
           {
-            let guild_count = cache.guilds().len();
             let active_count = session_manager.get_active_session_count().await;
-
-            if let Err(why) = stats_manager.set_server_count(guild_count) {
-              error!("Failed to update server count: {why}");
-            }
 
             if let Err(why) = stats_manager.set_active_count(active_count) {
               error!("Failed to update active count: {why}");
