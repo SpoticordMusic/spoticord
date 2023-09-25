@@ -32,7 +32,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: Entepotenz/change-string-case-action@v1 # https://github.com/orgs/community/discussions/10553
+      - uses: Entepotenz/change-string-case-action-min-dependencies@v1 # https://github.com/orgs/community/discussions/10553
         id: repo-uri-string
         with:
           string: ghcr.io/${{ github.repository }}
