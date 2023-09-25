@@ -1,5 +1,14 @@
 # Changelog
 
+## Current dev branch
+In this section of the change log all current changes that have been made since the last version will be documented. This list will grow as more changes are made, until the next release. Upon the next release the list will be cleared.
+
+### Changes
+* Removed OpenSSL dependency
+* Added aarch64 support
+* Added cross compilation to Github Actions
+* Added `dev` branch to Github Actions
+
 ## 2.1.1 | September 23rd 2023
 Reduced the amount of CPU that the bot uses from ~15%-25% per user to 1%-2% per user (percentage per core, benched on an AMD Ryzen 9 5950X).
 
