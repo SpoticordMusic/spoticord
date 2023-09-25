@@ -8,15 +8,14 @@ on:
     branches: [ "main", "dev" ]
   workflow_dispatch:
 
+permissions:
+  packages: write
+  contents: read
+      
 jobs:
   build-and-push:
     name: Build Docker image and push to registry
     runs-on: ubuntu-latest
-    
-    permissions:
-      packages: write
-      contents: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -33,13 +32,17 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: Entepotenz/change-string-case-action-min-dependencies@v1 # https://github.com/orgs/community/discussions/10553
+        id: repo-uri-string
+        with:
+          string: ghcr.io/${{ github.repository }}
+
       - name: Generate image metadata
-        id: spoticord # used in next step
+        id: docker-meta # used in next step
         uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
-          images: |
-            ghcr.io/spoticordmusic/spoticord
+          images: ${{ steps.repo-uri-string.outputs.lowercase }}
           # Docker tags based on the following events/attributes
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
@@ -56,8 +59,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.spoticord.outputs.tags }}
-          labels: ${{ steps.spoticord.outputs.labels }}
+          tags: ${{ steps.docker-meta.outputs.tags }}
+          labels: ${{ steps.docker-meta.outputs.labels }}
           # Some basic caching of the layers...
-          cache-from: ghcr.io/spoticordmusic/spoticord:latest-cache
-          cache-to: ghcr.io/spoticordmusic/spoticord:latest-cache
+          cache-from: ${{ steps.repo-uri-string.outputs.lowercase }}:latest-cache
+          cache-to: ${{ steps.repo-uri-string.outputs.lowercase }}:latest-cache
