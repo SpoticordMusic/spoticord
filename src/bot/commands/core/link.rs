@@ -8,6 +8,7 @@ use serenity::{
 
 use crate::{
   bot::commands::{respond_message, CommandOutput},
+  consts::SPOTICORD_ACCOUNTS_URL,
   database::{Database, DatabaseError},
   utils::embed::{EmbedBuilder, Status},
 };
@@ -39,8 +40,11 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
     }
 
     if let Ok(request) = database.get_user_request(command.user.id.to_string()).await {
-      let base = std::env::var("SPOTICORD_ACCOUNTS_URL").expect("to be present");
-      let link = format!("{}/spotify/{}", base, request.token);
+      let link = format!(
+        "{}/spotify/{}",
+        SPOTICORD_ACCOUNTS_URL.as_str(),
+        request.token
+      );
 
       respond_message(
         &ctx,
@@ -106,8 +110,11 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
       .await
     {
       Ok(request) => {
-        let base = std::env::var("SPOTICORD_ACCOUNTS_URL").expect("to be present");
-        let link = format!("{}/spotify/{}", base, request.token);
+        let link = format!(
+          "{}/spotify/{}",
+          SPOTICORD_ACCOUNTS_URL.as_str(),
+          request.token
+        );
 
         respond_message(
           &ctx,

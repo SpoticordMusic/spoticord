@@ -8,6 +8,7 @@ In this section of the change log all current changes that have been made since 
 * Added aarch64 support
 * Added cross compilation to Github Actions
 * Added `dev` branch to Github Actions
+* Removed hardcoded URL in the /join command
 
 ## 2.1.1 | September 23rd 2023
 Reduced the amount of CPU that the bot uses from ~15%-25% per user to 1%-2% per user (percentage per core, benched on an AMD Ryzen 9 5950X).

@@ -30,20 +30,22 @@ pub const NAME: &str = "playing";
 
 pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
   Box::pin(async move {
-    let not_playing = async {
-      respond_message(
-        &ctx,
-        &command,
-        EmbedBuilder::new()
-          .title("Cannot get track info")
-          .icon_url("https://spoticord.com/forbidden.png")
-          .description("I'm currently not playing any music in this server")
-          .status(Status::Error)
-          .build(),
-        true,
-      )
-      .await;
-    };
+    macro_rules! not_playing {
+      () => {
+        respond_message(
+          &ctx,
+          &command,
+          EmbedBuilder::new()
+            .title("Cannot get track info")
+            .icon_url("https://spoticord.com/forbidden.png")
+            .description("I'm currently not playing any music in this server")
+            .status(Status::Error)
+            .build(),
+          true,
+        )
+        .await;
+      };
+    }
 
     let data = ctx.data.read().await;
     let session_manager = data
@@ -51,62 +53,50 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
       .expect("to contain a value")
       .clone();
 
-    let session = match session_manager
+    let Some(session) = session_manager
       .get_session(command.guild_id.expect("to contain a value"))
       .await
-    {
-      Some(session) => session,
-      None => {
-        not_playing.await;
+    else {
+      not_playing!();
 
-        return;
-      }
+      return;
     };
 
-    let owner = match session.owner().await {
-      Some(owner) => owner,
-      None => {
-        not_playing.await;
+    let Some(owner) = session.owner().await else {
+      not_playing!();
 
-        return;
-      }
+      return;
     };
 
     // Get Playback Info from session
-    let pbi = match session.playback_info().await {
-      Some(pbi) => pbi,
-      None => {
-        not_playing.await;
+    let Some(pbi) = session.playback_info().await else {
+      not_playing!();
 
-        return;
-      }
+      return;
     };
 
     // Get owner of session
-    let owner = match utils::discord::get_user(&ctx, owner).await {
-      Some(user) => user,
-      None => {
-        // This shouldn't happen
+    let Some(owner) = utils::discord::get_user(&ctx, owner).await else {
+      // This shouldn't happen
 
-        error!("Could not find user with ID: {owner}");
+      error!("Could not find user with ID: {owner}");
 
-        respond_message(
-          &ctx,
-          &command,
-          EmbedBuilder::new()
-            .title("[INTERNAL ERROR] Cannot get track info")
-            .description(format!(
-              "Could not find user with ID `{}`\nThis is an issue with the bot!",
-              owner
-            ))
-            .status(Status::Error)
-            .build(),
-          true,
-        )
-        .await;
+      respond_message(
+        &ctx,
+        &command,
+        EmbedBuilder::new()
+          .title("[INTERNAL ERROR] Cannot get track info")
+          .description(format!(
+            "Could not find user with ID `{}`\nThis is an issue with the bot!",
+            owner
+          ))
+          .status(Status::Error)
+          .build(),
+        true,
+      )
+      .await;
 
-        return;
-      }
+      return;
     };
 
     // Get metadata
@@ -188,48 +178,39 @@ pub fn component(ctx: Context, mut interaction: MessageComponentInteraction) -> 
       .clone();
 
     // Check if session still exists
-    let mut session = match session_manager
+    let Some(mut session) = session_manager
       .get_session(interaction.guild_id.expect("to contain a value"))
       .await
-    {
-      Some(session) => session,
-      None => {
-        error_edit(
-          "Cannot perform action",
-          "I'm currently not playing any music in this server",
-        )
-        .await;
+    else {
+      error_edit(
+        "Cannot perform action",
+        "I'm currently not playing any music in this server",
+      )
+      .await;
 
-        return;
-      }
+      return;
     };
 
     // Check if the session contains an owner
-    let owner = match session.owner().await {
-      Some(owner) => owner,
-      None => {
-        error_edit(
-          "Cannot change playback state",
-          "I'm currently not playing any music in this server",
-        )
-        .await;
+    let Some(owner) = session.owner().await else {
+      error_edit(
+        "Cannot change playback state",
+        "I'm currently not playing any music in this server",
+      )
+      .await;
 
-        return;
-      }
+      return;
     };
 
     // Get Playback Info from session
-    let pbi = match session.playback_info().await {
-      Some(pbi) => pbi,
-      None => {
-        error_edit(
-          "Cannot change playback state",
-          "I'm currently not playing any music in this server",
-        )
-        .await;
+    let Some(pbi) = session.playback_info().await else {
+      error_edit(
+        "Cannot change playback state",
+        "I'm currently not playing any music in this server",
+      )
+      .await;
 
-        return;
-      }
+      return;
     };
 
     // Check if the user is the owner of the session
@@ -244,30 +225,27 @@ pub fn component(ctx: Context, mut interaction: MessageComponentInteraction) -> 
     }
 
     // Get owner of session
-    let owner = match utils::discord::get_user(&ctx, owner).await {
-      Some(user) => user,
-      None => {
-        // This shouldn't happen
+    let Some(owner) = utils::discord::get_user(&ctx, owner).await else {
+      // This shouldn't happen
 
-        error!("Could not find user with ID: {owner}");
+      error!("Could not find user with ID: {owner}");
 
-        respond_component_message(
-          &ctx,
-          &interaction,
-          EmbedBuilder::new()
-            .title("[INTERNAL ERROR] Cannot get track info")
-            .description(format!(
-              "Could not find user with ID `{}`\nThis is an issue with the bot!",
-              owner
-            ))
-            .status(Status::Error)
-            .build(),
-          true,
-        )
-        .await;
+      respond_component_message(
+        &ctx,
+        &interaction,
+        EmbedBuilder::new()
+          .title("[INTERNAL ERROR] Cannot get track info")
+          .description(format!(
+            "Could not find user with ID `{}`\nThis is an issue with the bot!",
+            owner
+          ))
+          .status(Status::Error)
+          .build(),
+        true,
+      )
+      .await;
 
-        return;
-      }
+      return;
     };
 
     // Send the desired command to the session
@@ -370,34 +348,28 @@ async fn update_embed(interaction: &mut MessageComponentInteraction, ctx: &Conte
     .clone();
 
   // Check if session still exists
-  let session = match session_manager
+  let Some(session) = session_manager
     .get_session(interaction.guild_id.expect("to contain a value"))
     .await
-  {
-    Some(session) => session,
-    None => {
-      error_edit(
-        "Cannot perform action",
-        "I'm currently not playing any music in this server",
-      )
-      .await;
+  else {
+    error_edit(
+      "Cannot perform action",
+      "I'm currently not playing any music in this server",
+    )
+    .await;
 
-      return;
-    }
+    return;
   };
 
   // Get Playback Info from session
-  let pbi = match session.playback_info().await {
-    Some(pbi) => pbi,
-    None => {
-      error_edit(
-        "Cannot change playback state",
-        "I'm currently not playing any music in this server",
-      )
-      .await;
+  let Some(pbi) = session.playback_info().await else {
+    error_edit(
+      "Cannot change playback state",
+      "I'm currently not playing any music in this server",
+    )
+    .await;
 
-      return;
-    }
+    return;
   };
 
   let (title, description, thumbnail) = get_metadata(&pbi);

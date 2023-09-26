@@ -2269,6 +2269,7 @@ dependencies = [
  "dotenv",
  "env_logger 0.10.0",
  "hex",
+ "lazy_static",
  "librespot",
  "log",
  "protobuf",
@@ -2280,7 +2281,6 @@ dependencies = [
  "serenity",
  "songbird",
  "thiserror",
- "time",
  "tokio",
  "zerocopy 0.7.5",
 ]
