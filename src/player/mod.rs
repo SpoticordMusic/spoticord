@@ -318,13 +318,13 @@ impl PlayerTask {
       match pbi.as_mut() {
         Some(pbi) => {
           pbi.update_track(spotify_id, current);
-          pbi.update_pos_dur(position_ms, duration_ms, true);
+          pbi.update_pos_dur(position_ms, duration_ms, playing);
         }
         None => {
           *pbi = Some(PlaybackInfo::new(
             duration_ms,
             position_ms,
-            true,
+            playing,
             current,
             spotify_id,
           ));

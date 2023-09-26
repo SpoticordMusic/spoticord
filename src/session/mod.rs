@@ -24,7 +24,7 @@ use songbird::{
   create_player,
   input::{Codec, Container, Input, Reader},
   tracks::TrackHandle,
-  Call, Event, EventContext, EventHandler, Songbird,
+  Call, Event, EventContext, EventHandler,
 };
 use std::{
   ops::{Deref, DerefMut},
@@ -36,6 +36,12 @@ use tokio::sync::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 #[derive(Clone)]
 pub struct SpoticordSession(Arc<RwLock<InnerSpoticordSession>>);
 
+impl Drop for SpoticordSession {
+  fn drop(&mut self) {
+    log::trace!("drop SpoticordSession");
+  }
+}
+
 struct InnerSpoticordSession {
   owner: Option<UserId>,
   guild_id: GuildId,
@@ -46,7 +52,6 @@ struct InnerSpoticordSession {
 
   session_manager: SessionManager,
 
-  songbird: Arc<Songbird>,
   call: Arc<Mutex<Call>>,
   track: Option<TrackHandle>,
   player: Option<Player>,
@@ -90,7 +95,6 @@ impl SpoticordSession {
       text_channel_id,
       http: ctx.http.clone(),
       session_manager: session_manager.clone(),
-      songbird: songbird.clone(),
       call: call.clone(),
       track: None,
       player: None,
@@ -342,6 +346,8 @@ impl SpoticordSession {
         timer.tick().await;
         timer.tick().await;
 
+        trace!("Ring ring, time to check :)");
+
         // Make sure this task has not been aborted, if it has this will automatically stop execution.
         tokio::task::yield_now().await;
 
@@ -350,6 +356,8 @@ impl SpoticordSession {
           .await
           .map(|pbi| pbi.is_playing)
           .unwrap_or(false);
+
+        trace!("is_playing = {is_playing}");
 
         if !is_playing {
           info!("Player is not playing, disconnecting");
@@ -511,9 +519,13 @@ impl InnerSpoticordSession {
       }
     };
 
-    if let Err(why) = self.songbird.remove(self.guild_id).await {
+    let mut call = self.call.lock().await;
+
+    if let Err(why) = call.leave().await {
       error!("Failed to leave voice channel: {:?}", why);
     }
+
+    call.remove_all_global_events();
   }
 }
 
@@ -523,10 +535,12 @@ impl EventHandler for SpoticordSession {
     match ctx {
       EventContext::DriverDisconnect(_) => {
         debug!("Driver disconnected, leaving voice channel");
+        trace!("Arc strong count: {}", Arc::strong_count(&self.0));
         self.disconnect().await;
       }
       EventContext::ClientDisconnect(who) => {
         trace!("Client disconnected, {}", who.user_id.to_string());
+        trace!("Arc strong count: {}", Arc::strong_count(&self.0));
 
         if let Some(session) = self
           .session_manager()
@@ -545,5 +559,11 @@ impl EventHandler for SpoticordSession {
     }
 
     return None;
+  }
+}
+
+impl Drop for InnerSpoticordSession {
+  fn drop(&mut self) {
+    log::trace!("drop InnerSpoticordSession");
   }
 }
