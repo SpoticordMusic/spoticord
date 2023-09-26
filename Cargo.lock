@@ -1727,8 +1727,6 @@ dependencies = [
  "itoa",
  "percent-encoding",
  "ryu",
- "sha1_smol",
- "socket2 0.4.9",
  "url",
 ]
 
@@ -2138,12 +2136,6 @@ dependencies = [
  "cpufeatures",
  "digest 0.10.7",
 ]
-
-[[package]]
-name = "sha1_smol"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae1a47186c03a32177042e55dbc5fd5aee900b8e0069a8d70fba96a9375cd012"
 
 [[package]]
 name = "shannon"
