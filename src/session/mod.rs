@@ -24,7 +24,7 @@ use songbird::{
   create_player,
   input::{Codec, Container, Input, Reader},
   tracks::TrackHandle,
-  Call, Event, EventContext, EventHandler,
+  Call, Event, EventContext, EventHandler, Songbird,
 };
 use std::{
   ops::{Deref, DerefMut},
@@ -46,6 +46,7 @@ struct InnerSpoticordSession {
 
   session_manager: SessionManager,
 
+  songbird: Arc<Songbird>,
   call: Arc<Mutex<Call>>,
   track: Option<TrackHandle>,
   player: Option<Player>,
@@ -89,6 +90,7 @@ impl SpoticordSession {
       text_channel_id,
       http: ctx.http.clone(),
       session_manager: session_manager.clone(),
+      songbird: songbird.clone(),
       call: call.clone(),
       track: None,
       player: None,
@@ -97,7 +99,11 @@ impl SpoticordSession {
     };
 
     let mut instance = Self(Arc::new(RwLock::new(inner)));
-    instance.create_player(ctx).await?;
+    if let Err(why) = instance.create_player(ctx).await {
+      songbird.remove(guild_id).await.ok();
+
+      return Err(why);
+    }
 
     let mut call = call.lock().await;
 
@@ -499,17 +505,13 @@ impl InnerSpoticordSession {
       .remove_session(self.guild_id, self.owner)
       .await;
 
-    let mut call = self.call.lock().await;
-
     if let Some(track) = self.track.take() {
       if let Err(why) = track.stop() {
         error!("Failed to stop track: {:?}", why);
       }
-    }
+    };
 
-    call.remove_all_global_events();
-
-    if let Err(why) = call.leave().await {
+    if let Err(why) = self.songbird.remove(self.guild_id).await {
       error!("Failed to leave voice channel: {:?}", why);
     }
   }
