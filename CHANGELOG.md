@@ -1,7 +1,6 @@
 # Changelog
 
-## Current dev branch
-In this section of the change log all current changes that have been made since the last version will be documented. This list will grow as more changes are made, until the next release. Upon the next release the list will be cleared.
+## 2.1.2 | September 28th 2023
 
 ### Changes
 * Removed OpenSSL dependency
@@ -9,6 +8,9 @@ In this section of the change log all current changes that have been made since 
 * Added cross compilation to Github Actions
 * Added `dev` branch to Github Actions
 * Removed hardcoded URL in the /join command
+* Fixed an issue in /playing where the bot showed it was playing even though it was paused
+
+**Full Changelog**: https://github.com/SpoticordMusic/spoticord/compare/v2.1.1...v2.1.2
 
 ## 2.1.1 | September 23rd 2023
 Reduced the amount of CPU that the bot uses from ~15%-25% per user to 1%-2% per user (percentage per core, benched on an AMD Ryzen 9 5950X).
@@ -16,7 +18,7 @@ Reduced the amount of CPU that the bot uses from ~15%-25% per user to 1%-2% per 
 ### Changes
 * Fixed issue #20
 
-**Full Changelog**: https://github.com/SpoticordMusic/spoticord/compare/v.2.1.0...v2.1.1
+**Full Changelog**: https://github.com/SpoticordMusic/spoticord/compare/v2.1.0...v2.1.1
 
 ## 2.1.0 | September 20th 2023
 So, it's been a while since I worked on this project, and some bugs have since been discovered.
@@ -36,7 +38,7 @@ The main focus for this version is to stop using multiple processes for every pl
 - After skipping a song, you will no longer hear a tiny bit of the previous song after the silence
 
 
-**Full Changelog**: https://github.com/SpoticordMusic/spoticord/compare/v2.0.0...v.2.1.0
+**Full Changelog**: https://github.com/SpoticordMusic/spoticord/compare/v2.0.0...v2.1.0
 
 ### Issues
 - Currently, the CPU usage is much higher than it used to be. I really wanted to push this update out before taking the time to do some optimizations, as the bot and server are still easily able to hold up the limited amount of Spoticord users (and v2.0.0 was just falling apart). Issue is being tracked in #20
