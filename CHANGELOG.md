@@ -1,5 +1,10 @@
 # Changelog
 
+## Current dev branch
+In this section of the change log all current changes that have been made since the last version will be documented. This list will grow as more changes are made, until the next release. Upon the next release the list will be cleared.
+
+### Changes
+
 ## 2.1.2 | September 28th 2023
 
 ### Changes
