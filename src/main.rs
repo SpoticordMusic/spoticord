@@ -1,10 +1,18 @@
 use dotenv::dotenv;
 
-use crate::{bot::commands::CommandManager, database::Database, session::manager::SessionManager};
+#[cfg(feature = "stats")]
+use crate::consts::KV_URL;
+
+use crate::{
+  bot::commands::CommandManager,
+  consts::{DATABASE_URL, DISCORD_TOKEN, MOTD},
+  database::Database,
+  session::manager::SessionManager,
+};
 use log::*;
 use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
 use songbird::SerenityInit;
-use std::{any::Any, env, process::exit};
+use std::{any::Any, process::exit};
 
 #[cfg(unix)]
 use tokio::signal::unix::SignalKind;
@@ -41,7 +49,7 @@ async fn main() {
   env_logger::init();
 
   info!("It's a good day");
-  info!(" - Spoticord {}", time::OffsetDateTime::now_utc().year());
+  info!(" - Spoticord, {}", MOTD);
 
   let result = dotenv();
 
@@ -54,19 +62,14 @@ async fn main() {
     warn!("No .env file found, expecting all necessary environment variables");
   }
 
-  let token = env::var("DISCORD_TOKEN").expect("a token in the environment");
-  let db_url = env::var("DATABASE_URL").expect("a database URL in the environment");
-
   #[cfg(feature = "stats")]
-  let stats_manager =
-    StatsManager::new(env::var("KV_URL").expect("a redis URL in the environment"))
-      .expect("Failed to connect to redis");
+  let stats_manager = StatsManager::new(KV_URL.as_str()).expect("Failed to connect to redis");
 
   let session_manager = SessionManager::new();
 
   // Create client
   let mut client = Client::builder(
-    token,
+    DISCORD_TOKEN.as_str(),
     GatewayIntents::GUILDS | GatewayIntents::GUILD_VOICE_STATES,
   )
   .event_handler(crate::bot::events::Handler)
@@ -78,15 +81,12 @@ async fn main() {
   {
     let mut data = client.data.write().await;
 
-    data.insert::<Database>(Database::new(db_url, None));
+    data.insert::<Database>(Database::new(DATABASE_URL.as_str(), None));
     data.insert::<CommandManager>(CommandManager::new());
     data.insert::<SessionManager>(session_manager.clone());
   }
 
   let shard_manager = client.shard_manager.clone();
-
-  #[cfg(feature = "stats")]
-  let cache = client.cache_and_http.cache.clone();
 
   #[cfg(unix)]
   let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
@@ -104,12 +104,7 @@ async fn main() {
         _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
           #[cfg(feature = "stats")]
           {
-            let guild_count = cache.guilds().len();
             let active_count = session_manager.get_active_session_count().await;
-
-            if let Err(why) = stats_manager.set_server_count(guild_count) {
-              error!("Failed to update server count: {why}");
-            }
 
             if let Err(why) = stats_manager.set_active_count(active_count) {
               error!("Failed to update active count: {why}");

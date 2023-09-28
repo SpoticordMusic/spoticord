@@ -56,11 +56,9 @@ impl InnerSessionManager {
     session: SpoticordSession,
     guild_id: GuildId,
     owner_id: UserId,
-  ) -> Result<(), SessionCreateError> {
+  ) {
     self.sessions.insert(guild_id, session);
     self.owner_map.insert(owner_id, guild_id);
-
-    Ok(())
   }
 
   /// Remove a session
@@ -147,7 +145,9 @@ impl SessionManager {
       .write()
       .await
       .create_session(session, guild_id, owner_id)
-      .await
+      .await;
+
+    Ok(())
   }
 
   /// Remove a session

@@ -12,12 +12,6 @@ impl StatsManager {
     Ok(StatsManager { redis })
   }
 
-  pub fn set_server_count(&self, count: usize) -> Result<()> {
-    let mut con = self.redis.get_connection()?;
-
-    con.set("sc-bot-total-servers", count.to_string())
-  }
-
   pub fn set_active_count(&self, count: usize) -> Result<()> {
     let mut con = self.redis.get_connection()?;
 

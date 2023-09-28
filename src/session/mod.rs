@@ -36,6 +36,12 @@ use tokio::sync::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 #[derive(Clone)]
 pub struct SpoticordSession(Arc<RwLock<InnerSpoticordSession>>);
 
+impl Drop for SpoticordSession {
+  fn drop(&mut self) {
+    log::trace!("drop SpoticordSession");
+  }
+}
+
 struct InnerSpoticordSession {
   owner: Option<UserId>,
   guild_id: GuildId,
@@ -97,7 +103,11 @@ impl SpoticordSession {
     };
 
     let mut instance = Self(Arc::new(RwLock::new(inner)));
-    instance.create_player(ctx).await?;
+    if let Err(why) = instance.create_player(ctx).await {
+      songbird.remove(guild_id).await.ok();
+
+      return Err(why);
+    }
 
     let mut call = call.lock().await;
 
@@ -336,6 +346,8 @@ impl SpoticordSession {
         timer.tick().await;
         timer.tick().await;
 
+        trace!("Ring ring, time to check :)");
+
         // Make sure this task has not been aborted, if it has this will automatically stop execution.
         tokio::task::yield_now().await;
 
@@ -344,6 +356,8 @@ impl SpoticordSession {
           .await
           .map(|pbi| pbi.is_playing)
           .unwrap_or(false);
+
+        trace!("is_playing = {is_playing}");
 
         if !is_playing {
           info!("Player is not playing, disconnecting");
@@ -499,19 +513,19 @@ impl InnerSpoticordSession {
       .remove_session(self.guild_id, self.owner)
       .await;
 
-    let mut call = self.call.lock().await;
-
     if let Some(track) = self.track.take() {
       if let Err(why) = track.stop() {
         error!("Failed to stop track: {:?}", why);
       }
-    }
+    };
 
-    call.remove_all_global_events();
+    let mut call = self.call.lock().await;
 
     if let Err(why) = call.leave().await {
       error!("Failed to leave voice channel: {:?}", why);
     }
+
+    call.remove_all_global_events();
   }
 }
 
@@ -521,10 +535,12 @@ impl EventHandler for SpoticordSession {
     match ctx {
       EventContext::DriverDisconnect(_) => {
         debug!("Driver disconnected, leaving voice channel");
+        trace!("Arc strong count: {}", Arc::strong_count(&self.0));
         self.disconnect().await;
       }
       EventContext::ClientDisconnect(who) => {
         trace!("Client disconnected, {}", who.user_id.to_string());
+        trace!("Arc strong count: {}", Arc::strong_count(&self.0));
 
         if let Some(session) = self
           .session_manager()
@@ -543,5 +559,11 @@ impl EventHandler for SpoticordSession {
     }
 
     return None;
+  }
+}
+
+impl Drop for InnerSpoticordSession {
+  fn drop(&mut self) {
+    log::trace!("drop InnerSpoticordSession");
   }
 }

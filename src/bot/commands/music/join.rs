@@ -7,6 +7,7 @@ use serenity::{
 
 use crate::{
   bot::commands::{defer_message, respond_message, update_message, CommandOutput},
+  consts::SPOTICORD_ACCOUNTS_URL,
   session::manager::{SessionCreateError, SessionManager},
   utils::embed::{EmbedBuilder, Status},
 };
@@ -241,7 +242,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
               &command,
               EmbedBuilder::new()
                 .title("Cannot join voice channel")
-                .description("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to get started.")
+                .description(format!("You need to link your Spotify account. Use </link:1036714850367320136> or go to [the accounts website]({}) to get started.", SPOTICORD_ACCOUNTS_URL.as_str()))
                 .status(Status::Error)
                 .build(),
             )
@@ -255,7 +256,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
               &command,
               EmbedBuilder::new()
                 .title("Cannot join voice channel")
-                .description("Spoticord no longer has access to your Spotify account. Use </link:1036714850367320136> or go to [the accounts website](https://account.spoticord.com/) to relink your Spotify account.")
+                .description(format!("Spoticord no longer has access to your Spotify account. Use </link:1036714850367320136> or go to [the accounts website]({}) to relink your Spotify account.", SPOTICORD_ACCOUNTS_URL.as_str()))
                 .status(Status::Error)
                 .build(),
             ).await;

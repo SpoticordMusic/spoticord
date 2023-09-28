@@ -27,17 +27,17 @@ sudo pacman -S base-devel
 sudo dnf install gcc
 ```
 
-Additionally, you will need to install CMake and OpenSSL (Linux only). On Windows, you can download CMake [here](https://cmake.org/download/). On Linux, you can use your package manager to install them:
+Additionally, you will need to install CMake. On Windows, you can download CMake [here](https://cmake.org/download/). On Linux, you can use your package manager to install it:
 
 ```sh
 # Debian/Ubuntu
-sudo apt install cmake libssl-dev
+sudo apt install cmake
 
 # Arch
-sudo pacman -S cmake openssl
+sudo pacman -S cmake
 
 # Fedora
-sudo dnf install cmake openssl-devel
+sudo dnf install cmake
 ```
 
 ## Compiling

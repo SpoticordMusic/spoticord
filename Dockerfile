@@ -1,25 +1,44 @@
 # Builder
-FROM rust:1.72.1-buster as builder
+FROM --platform=linux/amd64 rust:1.72.1-buster as builder
 
 WORKDIR /app
 
 # Add extra build dependencies here
-RUN apt-get update && apt-get install -y cmake
+RUN apt-get update && apt-get install -yqq \
+    cmake gcc-aarch64-linux-gnu  binutils-aarch64-linux-gnu 
 
 COPY . .
 
-# Remove `--features stats` if you want to deploy without stats collection
-RUN cargo install --path . --features stats
+RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu 
+
+# Remove `--features=stats` if you want to deploy without stats collection
+RUN cargo build --features=stats --release \
+    --target=x86_64-unknown-linux-gnu --target=aarch64-unknown-linux-gnu
 
 # Runtime
 FROM debian:buster-slim
 
-WORKDIR /app
+ARG TARGETPLATFORM
+ENV TARGETPLATFORM=$TARGETPLATFORM
 
 # Add extra runtime dependencies here
-RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -yqq --no-install-recommends \
+#     openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Copy spoticord binary from builder
-COPY --from=builder /usr/local/cargo/bin/spoticord ./spoticord
+# Copy spoticord binaries from builder to /tmp
+COPY --from=builder \
+    /app/target/x86_64-unknown-linux-gnu/release/spoticord /tmp/x86_64
+COPY --from=builder \
+    /app/target/aarch64-unknown-linux-gnu/release/spoticord /tmp/aarch64
 
-CMD ["./spoticord"]
+# Copy appropiate binary for target arch from /tmp  
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        cp /tmp/x86_64 /usr/local/bin/spoticord; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        cp /tmp/aarch64 /usr/local/bin/spoticord; \
+    fi
+
+# Delete unused binaries
+RUN rm -rvf /tmp/x86_64 /tmp/aarch64
+
+ENTRYPOINT [ "/usr/local/bin/spoticord" ]
