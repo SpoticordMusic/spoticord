@@ -7,10 +7,20 @@ use crate::{bot::Context, utils::embed::Color};
 pub async fn leave(ctx: Context<'_>) -> Result<(), Error> {
   let sm = &ctx.data().session_manager;
 
-  let Some(session) = sm
-    .get_session(&ctx.guild_id().expect("to contain a value"))
-    .await
-  else {
+  let Some(guild) = ctx.guild() else {
+    ctx
+      .send(|b| {
+        b.embed(|e| {
+          e.description("You can only execute this command inside of a server")
+            .color(Color::Error)
+        })
+      })
+      .await?;
+
+    return Ok(());
+  };
+
+  let Some(session) = sm.get_session(&guild.id).await else {
     ctx
       .send(|b| {
         b.embed(|f| {
