@@ -9,7 +9,7 @@ use crate::{
 };
 use dotenvy::dotenv;
 use log::*;
-use poise::FrameworkBuilder;
+use poise::{serenity_prelude::GuildId, FrameworkBuilder};
 use songbird::SerenityInit;
 use std::process::exit;
 
@@ -68,10 +68,17 @@ async fn main() {
     .client_settings(|client| client.register_songbird())
     .intents(bot::get_framework_intents())
     .options(bot::get_framework_opts())
-    .setup(move |_ctx, _ready, framework| {
+    .setup(move |ctx, _ready, framework| {
       // This runs after the first shard has connected successfully
 
       Box::pin(async move {
+        match std::env::var("GUILD_ID").map(|str| str.parse::<u64>().map(GuildId)) {
+          Ok(Ok(id)) => {
+            poise::builtins::register_in_guild(ctx, &framework.options().commands, id).await?
+          }
+          _ => poise::builtins::register_globally(ctx, &framework.options().commands).await?,
+        };
+
         let shard_manager = framework.shard_manager().clone();
 
         tokio::spawn(bot::background_loop(

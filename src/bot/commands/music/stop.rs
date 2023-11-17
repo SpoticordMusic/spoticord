@@ -1,10 +1,9 @@
+use crate::{bot::Context, utils::embed::Color};
 use poise::serenity_prelude::Error;
 
-use crate::{bot::Context, utils::embed::Color};
-
-/// Request the bot to leave the current voice channel
-#[poise::command(slash_command, aliases("disconnect"))]
-pub async fn leave(ctx: Context<'_>) -> Result<(), Error> {
+/// Disconnect the bot from Spotify, without leaving the voice call
+#[poise::command(slash_command)]
+pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
   let sm = &ctx.data().session_manager;
 
   let Some(guild) = ctx.guild() else {
@@ -24,7 +23,7 @@ pub async fn leave(ctx: Context<'_>) -> Result<(), Error> {
     ctx
       .send(|b| {
         b.embed(|f| {
-          f.title("Cannot disconnect bot")
+          f.title("Cannot stop bot")
             .description("I'm currently not connected to any voice channel")
             .color(Color::Error)
         })
@@ -54,8 +53,10 @@ pub async fn leave(ctx: Context<'_>) -> Result<(), Error> {
   ctx
     .send(|b| {
       b.embed(|f| {
-        f.description("I have left the voice channel, goodbye for now")
-          .color(Color::Info)
+        f.description(
+          "I have stopped playing for now. To resume playback, please run the join command again.",
+        )
+        .color(Color::Info)
       })
     })
     .await?;

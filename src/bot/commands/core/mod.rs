@@ -1,8 +1,8 @@
-pub mod help;
-pub mod link;
-pub mod rename;
-pub mod unlink;
-pub mod version;
+mod help;
+mod link;
+mod rename;
+mod unlink;
+mod version;
 
 pub use help::*;
 pub use link::*;

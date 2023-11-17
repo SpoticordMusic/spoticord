@@ -44,6 +44,7 @@ pub fn get_framework_opts() -> FrameworkOptions<Data, Error> {
       commands::music::join(),
       commands::music::leave(),
       commands::music::playing(),
+      commands::music::stop(),
     ],
     event_handler: |_ctx, event, _framework, _data| {
       Box::pin(event_handler(_ctx, event, _framework, _data))
