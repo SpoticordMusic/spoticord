@@ -1,83 +1,61 @@
+use crate::{bot::Context, database::DatabaseError, utils::embed::Color};
 use log::error;
-use serenity::{
-  builder::CreateApplicationCommand,
-  model::prelude::interaction::application_command::ApplicationCommandInteraction,
-  prelude::Context,
-};
+use poise::serenity_prelude::Error;
+use reqwest::StatusCode;
 
-use crate::{
-  bot::commands::{respond_message, CommandOutput},
-  database::{Database, DatabaseError},
-  session::manager::SessionManager,
-  utils::embed::{EmbedBuilder, Status},
-};
+/// Unlink your Spotify account from Spoticord
+#[poise::command(slash_command)]
+pub async fn unlink(ctx: Context<'_>) -> Result<(), Error> {
+  let db = &ctx.data().database;
+  let sm = &ctx.data().session_manager;
 
-pub const NAME: &str = "unlink";
+  // Disconnect session if user has any
+  if let Some(session) = sm.find(ctx.author().id).await {
+    session.disconnect().await;
+  }
 
-pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
-  Box::pin(async move {
-    let data = ctx.data.read().await;
-    let database = data.get::<Database>().expect("to contain a value");
-    let session_manager = data.get::<SessionManager>().expect("to contain a value");
-
-    // Disconnect session if user has any
-    if let Some(session) = session_manager.find(command.user.id).await {
-      session.disconnect().await;
-    }
-
-    // Check if user exists in the first place
-    if let Err(why) = database
-      .delete_user_account(command.user.id.to_string())
-      .await
-    {
-      if let DatabaseError::InvalidStatusCode(status) = why {
-        if status == 404 {
-          respond_message(
-            &ctx,
-            &command,
-            EmbedBuilder::new()
-              .description("You cannot unlink your Spotify account if you haven't linked one.")
-              .status(Status::Error)
-              .build(),
-            true,
-          )
-          .await;
-
-          return;
-        }
+  // Check if user exists in the first place
+  if let Err(why) = db.delete_user_account(ctx.author().id.to_string()).await {
+    match why {
+      DatabaseError::InvalidStatusCode(StatusCode::NOT_FOUND) => {
+        ctx
+          .send(|b| {
+            b.embed(|e| {
+              e.description("You cannot unlink your Spotify account if you haven't linked one.")
+                .color(Color::Error)
+            })
+            .ephemeral(true)
+          })
+          .await?;
       }
 
-      error!("Error deleting user account: {:?}", why);
+      _ => {
+        error!("Error deleting user account: {why:?}");
 
-      respond_message(
-          &ctx,
-          &command,
-          EmbedBuilder::new()
-                .description("An unexpected error has occured while trying to unlink your account. Please try again later.")
-                .status(Status::Error)
-                .build(),
-          true,
-        )
-        .await;
-
-      return;
+        ctx
+          .send(|b| {
+            b.embed(|e| {
+              e.description("An unexpected error has occured while trying to unlink your account. Please try again later.")
+                .color(Color::Error)
+            })
+            .ephemeral(true)
+          })
+          .await?;
+      }
     }
 
-    respond_message(
-      &ctx,
-      &command,
-      EmbedBuilder::new()
-        .description("Successfully unlinked your Spotify account from Spoticord")
-        .status(Status::Success)
-        .build(),
-      true,
-    )
-    .await;
-  })
-}
+    return Ok(());
+  }
 
-pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-  command
-    .name(NAME)
-    .description("Unlink your Spotify account from Spoticord")
+  ctx
+    .send(|b| {
+      b.embed(|e| {
+        e.description("Successfully unlinked your Spotify account from Spoticord")
+          .color(Color::Success)
+      })
+      .ephemeral(true)
+    })
+    .await?;
+
+  Ok(())
 }

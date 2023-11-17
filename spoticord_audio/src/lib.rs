@@ -5,7 +5,6 @@ use self::stream::Stream;
 use librespot::playback::audio_backend::{Sink, SinkAsBytes, SinkError, SinkResult};
 use librespot::playback::convert::Converter;
 use librespot::playback::decoder::AudioPacket;
-use log::error;
 use std::io::Write;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -30,7 +29,6 @@ impl Sink for StreamSink {
     if let Err(why) = self.sender.send(SinkEvent::Start) {
       // WARNING: Returning an error causes librespot-playback to exit the process with status 1
 
-      error!("Failed to send start playback event: {why}");
       return Err(SinkError::ConnectionRefused(why.to_string()));
     }
 
@@ -41,7 +39,6 @@ impl Sink for StreamSink {
     if let Err(why) = self.sender.send(SinkEvent::Stop) {
       // WARNING: Returning an error causes librespot-playback to exit the process with status 1
 
-      error!("Failed to send start playback event: {why}");
       return Err(SinkError::ConnectionRefused(why.to_string()));
     }
 

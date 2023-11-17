@@ -1,33 +1,12 @@
+use crate::bot::Context;
 use log::info;
-use serenity::{
-  builder::CreateApplicationCommand,
-  model::prelude::interaction::{
-    application_command::ApplicationCommandInteraction, InteractionResponseType,
-  },
-  prelude::Context,
-};
+use poise::serenity_prelude::Error;
 
-use super::CommandOutput;
+/// Check if the bot is alive
+#[poise::command(slash_command)]
+pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
+  info!("Pong!");
+  ctx.send(|reply| reply.content("Pong!").reply(true)).await?;
 
-pub const NAME: &str = "ping";
-
-pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
-  Box::pin(async move {
-    info!("Pong!");
-
-    command
-      .create_interaction_response(&ctx.http, |response| {
-        response
-          .kind(InteractionResponseType::ChannelMessageWithSource)
-          .interaction_response_data(|message| message.content("Pong!"))
-      })
-      .await
-      .ok();
-  })
-}
-
-pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-  command
-    .name("ping")
-    .description("Check if the bot is alive")
+  Ok(())
 }

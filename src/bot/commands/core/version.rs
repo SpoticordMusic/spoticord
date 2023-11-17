@@ -1,46 +1,28 @@
-use log::error;
-use serenity::{
-  builder::CreateApplicationCommand,
-  model::prelude::interaction::{
-    application_command::ApplicationCommandInteraction, InteractionResponseType,
-  },
-  prelude::Context,
-};
+use crate::{bot::Context, consts::VERSION, utils::embed::Color};
+use poise::serenity_prelude::Error;
 
-use crate::{bot::commands::CommandOutput, consts::VERSION, utils::embed::Status};
+const IMAGE_URL: &str = "https://cdn.discordapp.com/avatars/389786424142200835/6bfe3840b0aa6a1baf432bb251b70c9f.webp?size=128";
 
-pub const NAME: &str = "version";
+/// Shows the current running version of Spoticord
+#[poise::command(slash_command)]
+pub async fn version(ctx: Context<'_>) -> Result<(), Error> {
+  // Had to pull this from the builder as rustfmt refused to format the file
+  let description = format!("Current version: {}\n\nSpoticord is open source, check out [our GitHub](https://github.com/SpoticordMusic)", VERSION);
 
-pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
-  Box::pin(async move {
-    if let Err(why) = command
-      .create_interaction_response(&ctx.http, |response| {
-        response
-          .kind(InteractionResponseType::ChannelMessageWithSource)
-          .interaction_response_data(|message| {
-            message.embed(|embed| {
-              embed
-                .title("Spoticord Version")
-                .author(|author| {
-                  author
-                    .name("Maintained by: DaXcess (@rodabafilms)")
-                    .url("https://github.com/DaXcess")
-                    .icon_url("https://cdn.discordapp.com/avatars/389786424142200835/6bfe3840b0aa6a1baf432bb251b70c9f.webp?size=128")
-                })
-                .description(format!("Current version: {}\n\nSpoticord is open source, check out [our GitHub](https://github.com/SpoticordMusic)", VERSION))
-                .color(Status::Info as u64)
-            })
+  ctx
+    .send(|b| {
+      b.embed(|e| {
+        e.title("Spoticord Version")
+          .author(|a| {
+            a.name("Maintained by: DaXcess (@rodabafilms)")
+              .url("https://github.com/DaXcess")
+              .icon_url(IMAGE_URL)
           })
+          .description(description)
+          .color(Color::Info)
       })
-      .await
-    {
-      error!("Error sending message: {:?}", why);
-    }
-  })
-}
+    })
+    .await?;
 
-pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-  command
-    .name(NAME)
-    .description("Shows the current running version of Spoticord")
+  Ok(())
 }

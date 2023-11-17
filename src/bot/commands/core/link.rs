@@ -1,159 +1,97 @@
+use crate::{bot::Context, consts::SPOTICORD_ACCOUNTS_URL, utils::embed::Color};
 use log::error;
-use reqwest::StatusCode;
-use serenity::{
-  builder::CreateApplicationCommand,
-  model::prelude::interaction::application_command::ApplicationCommandInteraction,
-  prelude::Context,
-};
+use poise::serenity_prelude::Error;
 
-use crate::{
-  bot::commands::{respond_message, CommandOutput},
-  consts::SPOTICORD_ACCOUNTS_URL,
-  database::{Database, DatabaseError},
-  utils::embed::{EmbedBuilder, Status},
-};
+/// Link your Spotify account to Spoticord
+#[poise::command(slash_command)]
+pub async fn link(ctx: Context<'_>) -> Result<(), Error> {
+  let db = &ctx.data().database;
 
-pub const NAME: &str = "link";
+  if db
+    .get_user_account(ctx.author().id.to_string())
+    .await
+    .is_ok()
+  {
+    ctx
+      .send(|b| {
+        b.embed(|e| {
+          e.description("You have already linked your Spotify account")
+            .color(Color::Error)
+        })
+        .ephemeral(true)
+      })
+      .await?;
 
-pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandOutput {
-  Box::pin(async move {
-    let data = ctx.data.read().await;
-    let database = data.get::<Database>().expect("to contain a value");
+    return Ok(());
+  }
 
-    if database
-      .get_user_account(command.user.id.to_string())
-      .await
-      .is_ok()
-    {
-      respond_message(
-        &ctx,
-        &command,
-        EmbedBuilder::new()
-          .description("You have already linked your Spotify account.")
-          .status(Status::Error)
-          .build(),
-        true,
-      )
-      .await;
+  macro_rules! send_link_message {
+    ($token:expr) => {
+      let link = format!("{}/spotify/{}", SPOTICORD_ACCOUNTS_URL.as_str(), $token);
 
-      return;
-    }
-
-    if let Ok(request) = database.get_user_request(command.user.id.to_string()).await {
-      let link = format!(
-        "{}/spotify/{}",
-        SPOTICORD_ACCOUNTS_URL.as_str(),
-        request.token
-      );
-
-      respond_message(
-        &ctx,
-        &command,
-        EmbedBuilder::new()
-          .title("Link your Spotify account")
-          .title_url(&link)
-          .icon_url("https://spoticord.com/spotify-logo.png")
-          .description(format!(
-            "Go to [this link]({}) to connect your Spotify account.",
-            link
-          ))
-          .status(Status::Info)
-          .build(),
-        true,
-      )
-      .await;
-
-      return;
-    }
-
-    // Check if user exists, if not, create them
-    if let Err(why) = database.get_user(command.user.id.to_string()).await {
-      match why {
-        DatabaseError::InvalidStatusCode(StatusCode::NOT_FOUND) => {
-          if let Err(why) = database.create_user(command.user.id.to_string()).await {
-            error!("Error creating user: {:?}", why);
-
-            respond_message(
-              &ctx,
-              &command,
-              EmbedBuilder::new()
-                .description("Something went wrong while trying to link your Spotify account.")
-                .status(Status::Error)
-                .build(),
-              true,
-            )
-            .await;
-
-            return;
-          }
-        }
-
-        _ => {
-          respond_message(
-            &ctx,
-            &command,
-            EmbedBuilder::new()
-              .description("Something went wrong while trying to link your Spotify account.")
-              .status(Status::Error)
-              .build(),
-            true,
-          )
-          .await;
-
-          return;
-        }
-      }
-    }
-
-    match database
-      .create_user_request(command.user.id.to_string())
-      .await
-    {
-      Ok(request) => {
-        let link = format!(
-          "{}/spotify/{}",
-          SPOTICORD_ACCOUNTS_URL.as_str(),
-          request.token
-        );
-
-        respond_message(
-          &ctx,
-          &command,
-          EmbedBuilder::new()
-            .title("Link your Spotify account")
-            .title_url(&link)
-            .icon_url("https://spoticord.com/spotify-logo.png")
+      ctx
+        .send(|b| {
+          b.embed(|e| {
+            e.author(|a| {
+              a.name("Link your Spotify account")
+                .url(&link)
+                .icon_url("https://spoticord.com/spotify-logo.png")
+            })
             .description(format!(
               "Go to [this link]({}) to connect your Spotify account.",
               link
             ))
-            .status(Status::Info)
-            .build(),
-          true,
-        )
-        .await;
-      }
-
-      Err(why) => {
-        error!("Error creating user request: {:?}", why);
-
-        respond_message(
-          &ctx,
-          &command,
-          EmbedBuilder::new()
-            .description("An error occurred while serving your request. Please try again later.")
-            .status(Status::Error)
-            .build(),
-          true,
-        )
-        .await;
-      }
+            .color(Color::Info)
+          })
+          .ephemeral(true)
+        })
+        .await?;
     };
-  })
-}
+  }
 
-pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-  command
-    .name(NAME)
-    .description("Link your Spotify account to Spoticord")
+  macro_rules! send_error_message {
+    () => {
+      ctx
+        .send(|b| {
+          b.embed(|e| {
+            e.description("Something went wrong while trying to link your Spotify account.")
+              .color(Color::Error)
+          })
+          .ephemeral(true)
+        })
+        .await?;
+
+      return Ok(());
+    };
+  }
+
+  if let Ok(request) = db.get_user_request(ctx.author().id.to_string()).await {
+    send_link_message!(request.token);
+
+    return Ok(());
+  }
+
+  // Check if user exists, if not, create them
+  let user = match db.get_or_create_user(ctx.author().id.to_string()).await {
+    Ok(user) => user,
+    Err(why) => {
+      error!("Error fetching user: {why:?}");
+
+      send_error_message!();
+    }
+  };
+
+  match db.create_user_request(user.id).await {
+    Ok(request) => {
+      send_link_message!(request.token);
+    }
+
+    Err(why) => {
+      error!("Error creating user request: {why:?}");
+
+      send_error_message!();
+    }
+  }
+
+  Ok(())
 }

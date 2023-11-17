@@ -6,26 +6,27 @@ use self::{
   pbi::PlaybackInfo,
 };
 use crate::{
-  audio::stream::Stream,
+  bot::Context,
   consts::DISCONNECT_TIME,
-  database::{Database, DatabaseError},
+  database::DatabaseError,
   player::{Player, PlayerEvent},
-  utils::embed::Status,
+  utils::embed::Color,
 };
 use log::*;
-use reqwest::StatusCode;
-use serenity::{
+use poise::serenity_prelude::{
   async_trait,
   http::Http,
   model::prelude::{ChannelId, GuildId, UserId},
-  prelude::{Context, RwLock},
+  prelude::RwLock,
 };
+use reqwest::StatusCode;
 use songbird::{
   create_player,
   input::{Codec, Container, Input, Reader},
   tracks::TrackHandle,
   Call, Event, EventContext, EventHandler,
 };
+use spoticord_audio::stream::Stream;
 use std::{
   sync::{Arc, Weak},
   time::Duration,
@@ -67,21 +68,20 @@ struct SessionInner {
 
 impl Session {
   pub async fn new(
-    ctx: &Context,
+    ctx: &Context<'_>,
     guild_id: GuildId,
     channel_id: ChannelId,
     text_channel_id: ChannelId,
     owner_id: UserId,
   ) -> Result<Session, SessionCreateError> {
     // Get the Spotify token of the owner
-    let data = ctx.data.read().await;
-    let session_manager = data
-      .get::<SessionManager>()
-      .expect("to contain a value")
-      .clone();
+    let session_manager = &ctx.data().session_manager;
 
     // Join the voice channel
-    let songbird = songbird::get(ctx).await.expect("to be present").clone();
+    let songbird = songbird::get(ctx.serenity_context())
+      .await
+      .expect("to be present")
+      .clone();
 
     let (call, result) = songbird.join(guild_id, channel_id).await;
 
@@ -95,7 +95,7 @@ impl Session {
       guild_id,
       channel_id,
       text_channel_id,
-      http: ctx.http.clone(),
+      http: ctx.serenity_context().http.clone(),
       session_manager: session_manager.clone(),
       call: call.clone(),
       track: None,
@@ -129,15 +129,11 @@ impl Session {
 
   pub async fn update_owner(
     &mut self,
-    ctx: &Context,
+    ctx: &Context<'_>,
     owner_id: UserId,
   ) -> Result<(), SessionCreateError> {
     // Get the Spotify token of the owner
-    let data = ctx.data.read().await;
-    let session_manager = data
-      .get::<SessionManager>()
-      .expect("to contain a value")
-      .clone();
+    let session_manager = &ctx.data().session_manager;
 
     {
       let mut inner = self.0.write().await;
@@ -156,6 +152,7 @@ impl Session {
   }
 
   /// Advance to the next track
+  #[allow(unused)]
   pub async fn next(&mut self) {
     if let Some(ref player) = self.0.read().await.player {
       player.next();
@@ -163,6 +160,7 @@ impl Session {
   }
 
   /// Rewind to the previous track
+  #[allow(unused)]
   pub async fn previous(&mut self) {
     if let Some(ref player) = self.0.read().await.player {
       player.prev();
@@ -170,6 +168,7 @@ impl Session {
   }
 
   /// Pause the current track
+  #[allow(unused)]
   pub async fn pause(&mut self) {
     if let Some(ref player) = self.0.read().await.player {
       player.pause();
@@ -177,20 +176,20 @@ impl Session {
   }
 
   /// Resume the current track
+  #[allow(unused)]
   pub async fn resume(&mut self) {
     if let Some(ref player) = self.0.read().await.player {
       player.play();
     }
   }
 
-  async fn create_player(&mut self, ctx: &Context) -> Result<(), SessionCreateError> {
+  async fn create_player(&mut self, ctx: &Context<'_>) -> Result<(), SessionCreateError> {
     let owner_id = match self.owner().await {
       Some(owner_id) => owner_id,
       None => return Err(SessionCreateError::NoOwner),
     };
 
-    let data = ctx.data.read().await;
-    let database = data.get::<Database>().expect("to contain a value");
+    let database = &ctx.data().database;
 
     let token = match database.get_access_token(owner_id.to_string()).await {
       Ok(token) => token,
@@ -406,7 +405,7 @@ impl Session {
           message.embed(|embed| {
             embed.title("Disconnected from voice channel");
             embed.description(content);
-            embed.color(Status::Warning as u64);
+            embed.color(Color::Warning as u64);
 
             embed
           })
@@ -444,7 +443,7 @@ impl Session {
   }
 
   /// Get the channel id
-  #[allow(dead_code)]
+  #[allow(unused)]
   pub async fn text_channel_id(&self) -> ChannelId {
     self.0.read().await.text_channel_id
   }
@@ -461,7 +460,7 @@ impl Session {
     self.0.read().await.call.clone()
   }
 
-  #[allow(dead_code)]
+  #[allow(unused)]
   pub async fn http(&self) -> Arc<Http> {
     self.0.read().await.http.clone()
   }

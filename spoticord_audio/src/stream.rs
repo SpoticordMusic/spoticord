@@ -10,16 +10,14 @@ use songbird::input::reader::MediaSource;
 /// Too low of a value results in unpredictable audio
 const MAX_SIZE: usize = 32 * 1024;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Stream {
   inner: Arc<(Mutex<Vec<u8>>, Condvar)>,
 }
 
 impl Stream {
   pub fn new() -> Self {
-    Self {
-      inner: Arc::new((Mutex::new(Vec::new()), Condvar::new())),
-    }
+    Self::default()
   }
 }
 

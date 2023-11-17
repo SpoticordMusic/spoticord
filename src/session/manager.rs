@@ -1,11 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
-use serenity::{
-  model::prelude::{ChannelId, GuildId, UserId},
-  prelude::{Context, TypeMapKey},
-};
+use poise::serenity_prelude::model::prelude::{ChannelId, GuildId, UserId};
 use songbird::error::JoinError;
 use thiserror::Error;
+
+use crate::bot::Context;
 
 use super::Session;
 
@@ -33,10 +32,6 @@ pub enum SessionCreateError {
 #[derive(Clone)]
 pub struct SessionManager(Arc<tokio::sync::RwLock<InnerSessionManager>>);
 
-impl TypeMapKey for SessionManager {
-  type Value = SessionManager;
-}
-
 pub struct InnerSessionManager {
   sessions: HashMap<GuildId, Session>,
   owner_map: HashMap<UserId, GuildId>,
@@ -53,7 +48,7 @@ impl SessionManager {
   /// Creates a new session for the given user in the given guild.
   pub async fn create_session(
     &self,
-    ctx: &Context,
+    ctx: &Context<'_>,
     guild_id: GuildId,
     channel_id: ChannelId,
     text_channel_id: ChannelId,

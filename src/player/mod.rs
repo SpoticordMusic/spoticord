@@ -19,6 +19,7 @@ use librespot::{
 use log::error;
 use protobuf::Message;
 use songbird::tracks::TrackHandle;
+use spoticord_audio::{stream::Stream, SinkEvent, StreamSink};
 use tokio::sync::{
   broadcast::{Receiver, Sender},
   mpsc::UnboundedReceiver,
@@ -26,7 +27,6 @@ use tokio::sync::{
 };
 
 use crate::{
-  audio::{stream::Stream, SinkEvent, StreamSink},
   librespot_ext::discovery::CredentialsExt,
   session::pbi::{CurrentTrack, PlaybackInfo},
   utils,

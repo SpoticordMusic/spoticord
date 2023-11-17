@@ -1,5 +1,5 @@
 # Builder
-FROM --platform=linux/amd64 rust:1.72.1-buster as builder
+FROM --platform=linux/amd64 rust:1.74.0-buster as builder
 
 WORKDIR /app
 

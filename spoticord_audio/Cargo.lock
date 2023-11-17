@@ -117,12 +117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.75"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
-
-[[package]]
 name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -334,7 +328,6 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits 0.2.17",
- "serde",
  "wasm-bindgen",
  "windows-targets",
 ]
@@ -509,18 +502,8 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
 dependencies = [
- "darling_core 0.13.4",
- "darling_macro 0.13.4",
-]
-
-[[package]]
-name = "darling"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b750cb3417fd1b327431a470f388520309479ab0bf5e323505daf0290cd3850"
-dependencies = [
- "darling_core 0.14.4",
- "darling_macro 0.14.4",
+ "darling_core",
+ "darling_macro",
 ]
 
 [[package]]
@@ -538,37 +521,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "darling_core"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "109c1ca6e6b7f82cc233a97004ea8ed7ca123a9af07a8230878fcfda9b158bf0"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "darling_macro"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
 dependencies = [
- "darling_core 0.13.4",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "darling_macro"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4aab4dbc9f7611d8b55048a3a16d2d010c2c8334e46304b40ac1cc14bf3b48e"
-dependencies = [
- "darling_core 0.14.4",
+ "darling_core",
  "quote",
  "syn 1.0.109",
 ]
@@ -584,7 +542,6 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core 0.9.9",
- "serde",
 ]
 
 [[package]]
@@ -638,12 +595,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dotenvy"
-version = "0.15.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -670,19 +621,6 @@ dependencies = [
  "atty",
  "humantime",
  "log",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b3f3e67048839cb0d0781f445682a35113da7121f7c949db0e2be96a4fbece"
-dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
  "termcolor",
 ]
 
@@ -1173,17 +1111,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
 
 [[package]]
-name = "is-terminal"
-version = "0.4.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb0889898416213fab133e1d33a0e5858a48177452750691bde3666d0fdbaf8b"
-dependencies = [
- "hermit-abi 0.3.3",
- "rustix",
- "windows-sys",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1299,7 +1226,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea4c9952ef48968f8184a4a87f8576982426ebe623342d5a28f7d9c4978e4a44"
 dependencies = [
  "base64 0.13.1",
- "env_logger 0.9.3",
+ "env_logger",
  "futures-util",
  "getopts",
  "hex",
@@ -1655,7 +1582,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0df7ac00c4672f9d5aece54ee3347520b7e20f158656c7db2e6de01902eb7a6c"
 dependencies = [
- "darling 0.13.4",
+ "darling",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
@@ -2004,37 +1931,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "poise"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d104e4b5847283b2fbd6a7ec19fb6a8af328e2145623d056b66d750a30073fdf"
-dependencies = [
- "async-trait",
- "derivative",
- "futures-core",
- "futures-util",
- "log",
- "once_cell",
- "parking_lot 0.12.1",
- "poise_macros",
- "regex",
- "serenity",
- "tokio",
-]
-
-[[package]]
-name = "poise_macros"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb516a8cf4e4ae4bd7ef5819d08c6ca408976461a9bea3ee3eec5138ac070c1"
-dependencies = [
- "darling 0.14.4",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "poly1305"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2158,19 +2054,6 @@ checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
 dependencies = [
  "num-traits 0.2.17",
  "rand",
-]
-
-[[package]]
-name = "redis"
-version = "0.23.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f49cdc0bb3f412bf8e7d1bd90fe1d9eb10bc5c399ba90973c14662a27b3f8ba"
-dependencies = [
- "combine",
- "itoa",
- "percent-encoding",
- "ryu",
- "url",
 ]
 
 [[package]]
@@ -2549,16 +2432,12 @@ dependencies = [
  "bitflags 1.3.2",
  "bytes",
  "cfg-if",
- "chrono",
- "dashmap",
  "flate2",
  "futures",
  "mime",
  "mime_guess",
- "parking_lot 0.12.1",
  "percent-encoding",
  "reqwest",
- "rustversion",
  "serde",
  "serde-value",
  "serde_json",
@@ -2740,33 +2619,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "spoticord"
-version = "2.2.0"
-dependencies = [
- "anyhow",
- "dotenvy",
- "env_logger 0.10.1",
- "hex",
- "lazy_static",
- "librespot",
- "log",
- "poise",
- "protobuf",
- "redis",
- "reqwest",
- "samplerate",
- "serde",
- "serde_json",
- "songbird",
- "spoticord_audio",
- "thiserror",
- "tokio",
- "zerocopy 0.7.26",
-]
-
-[[package]]
 name = "spoticord_audio"
-version = "2.2.0"
+version = "0.1.0"
 dependencies = [
  "librespot",
  "samplerate",

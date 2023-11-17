@@ -1,23 +1,18 @@
-use dotenvy::dotenv;
-
 #[cfg(feature = "stats")]
 use crate::consts::KV_URL;
 
 use crate::{
-  bot::commands::CommandManager,
+  bot::Data,
   consts::{DATABASE_URL, DISCORD_TOKEN, MOTD},
   database::Database,
   session::manager::SessionManager,
 };
+use dotenvy::dotenv;
 use log::*;
-use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
+use poise::FrameworkBuilder;
 use songbird::SerenityInit;
-use std::{any::Any, process::exit};
+use std::process::exit;
 
-#[cfg(unix)]
-use tokio::signal::unix::SignalKind;
-
-mod audio;
 mod bot;
 mod consts;
 mod database;
@@ -64,89 +59,38 @@ async fn main() {
 
   #[cfg(feature = "stats")]
   let stats_manager = StatsManager::new(KV_URL.as_str()).expect("Failed to connect to redis");
-
   let session_manager = SessionManager::new();
+  let database = Database::new(DATABASE_URL.as_str(), None);
 
   // Create client
-  let mut client = Client::builder(
-    DISCORD_TOKEN.as_str(),
-    GatewayIntents::GUILDS | GatewayIntents::GUILD_VOICE_STATES,
-  )
-  .event_handler(crate::bot::events::Handler)
-  .framework(StandardFramework::new())
-  .register_songbird()
-  .await
-  .expect("to create a client");
+  let client = FrameworkBuilder::default()
+    .token(DISCORD_TOKEN.as_str())
+    .client_settings(|client| client.register_songbird())
+    .intents(bot::get_framework_intents())
+    .options(bot::get_framework_opts())
+    .setup(move |_ctx, _ready, framework| {
+      // This runs after the first shard has connected successfully
 
-  {
-    let mut data = client.data.write().await;
+      Box::pin(async move {
+        let shard_manager = framework.shard_manager().clone();
 
-    data.insert::<Database>(Database::new(DATABASE_URL.as_str(), None));
-    data.insert::<CommandManager>(CommandManager::new());
-    data.insert::<SessionManager>(session_manager.clone());
-  }
-
-  let shard_manager = client.shard_manager.clone();
-
-  #[cfg(unix)]
-  let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
-    tokio::signal::unix::signal(SignalKind::terminate())
-      .expect("to be able to create the signal stream"),
-  ));
-
-  #[cfg(not(unix))]
-  let term: Option<Box<dyn Any + Send>> = None;
-
-  // Background tasks
-  tokio::spawn(async move {
-    loop {
-      tokio::select! {
-        _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+        tokio::spawn(bot::background_loop(
+          session_manager.clone(),
           #[cfg(feature = "stats")]
-          {
-            let active_count = session_manager.get_active_session_count().await;
+          stats_manager,
+          shard_manager,
+        ));
 
-            if let Err(why) = stats_manager.set_active_count(active_count) {
-              error!("Failed to update active count: {why}");
-            }
-          }
-        }
-
-        _ = tokio::signal::ctrl_c() => {
-          info!("Received interrupt signal, shutting down...");
-
-          session_manager.shutdown().await;
-          shard_manager.lock().await.shutdown_all().await;
-
-          break;
-        }
-
-        _ = async {
-          #[cfg(unix)]
-          match term {
-            Some(ref mut term) => {
-              let term = term.downcast_mut::<tokio::signal::unix::Signal>().expect("to be able to downcast");
-
-              term.recv().await
-            }
-
-            _ => None
-          }
-        }, if term.is_some() => {
-          info!("Received terminate signal, shutting down...");
-
-          session_manager.shutdown().await;
-          shard_manager.lock().await.shutdown_all().await;
-
-          break;
-        }
-      }
-    }
-  });
+        Ok(Data {
+          database,
+          session_manager,
+        })
+      })
+    });
 
   // Start the bot
-  if let Err(why) = client.start_autosharded().await {
-    error!("FATAL Error in bot: {:?}", why);
+  if let Err(why) = client.run_autosharded().await {
+    error!("[FATAL] Error while running bot: {why}");
     exit(1);
   }
 }

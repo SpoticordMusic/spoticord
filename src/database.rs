@@ -4,7 +4,6 @@ use log::trace;
 use reqwest::{header::HeaderMap, Client, Error, Response, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
-use serenity::prelude::TypeMapKey;
 
 use crate::utils;
 
@@ -68,14 +67,14 @@ struct RequestOptions {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(unused)]
 enum Body {
   Json(Value),
   Text(String),
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(unused)]
 enum Method {
   Get,
   Post,
@@ -199,52 +198,54 @@ impl Database {
 
 impl Database {
   // Get Spoticord user
-  pub async fn get_user(&self, user_id: impl Into<String>) -> Result<User, DatabaseError> {
-    let path = format!("/user/{}", user_id.into());
+  pub async fn get_user(&self, user_id: impl AsRef<str>) -> Result<User, DatabaseError> {
+    let path = format!("/user/{}", user_id.as_ref());
 
     self.simple_get(path).await
   }
 
+  pub async fn get_or_create_user(&self, user_id: impl AsRef<str>) -> Result<User, DatabaseError> {
+    let user_id = user_id.as_ref();
+
+    let result = self.get_user(user_id).await;
+    if let Err(DatabaseError::InvalidStatusCode(StatusCode::NOT_FOUND)) = result {
+      return self.create_user(user_id).await;
+    }
+
+    result
+  }
+
   // Get the Spotify access token for a user
-  pub async fn get_access_token(
-    &self,
-    user_id: impl Into<String> + Send,
-  ) -> Result<String, DatabaseError> {
+  pub async fn get_access_token(&self, user_id: impl AsRef<str>) -> Result<String, DatabaseError> {
     let body: GetAccessTokenResponse = self
-      .simple_get(format!("/user/{}/spotify/access_token", user_id.into()))
+      .simple_get(format!("/user/{}/spotify/access_token", user_id.as_ref()))
       .await?;
 
     Ok(body.access_token)
   }
 
   // Get the Spotify account for a user
-  pub async fn get_user_account(
-    &self,
-    user_id: impl Into<String> + Send,
-  ) -> Result<Account, DatabaseError> {
+  pub async fn get_user_account(&self, user_id: impl AsRef<str>) -> Result<Account, DatabaseError> {
     let body: Account = self
-      .simple_get(format!("/account/{}/spotify", user_id.into()))
+      .simple_get(format!("/account/{}/spotify", user_id.as_ref()))
       .await?;
 
     Ok(body)
   }
 
   // Get the Request for a user
-  pub async fn get_user_request(
-    &self,
-    user_id: impl Into<String> + Send,
-  ) -> Result<Request, DatabaseError> {
+  pub async fn get_user_request(&self, user_id: impl AsRef<str>) -> Result<Request, DatabaseError> {
     let body: Request = self
-      .simple_get(format!("/request/by-user/{}", user_id.into()))
+      .simple_get(format!("/request/by-user/{}", user_id.as_ref()))
       .await?;
 
     Ok(body)
   }
 
   // Create a Spoticord user
-  pub async fn create_user(&self, user_id: impl Into<String>) -> Result<User, DatabaseError> {
+  pub async fn create_user(&self, user_id: impl AsRef<str>) -> Result<User, DatabaseError> {
     let body = json!({
-     "id": user_id.into(),
+     "id": user_id.as_ref(),
     });
 
     let user: User = self.json_post(body, "/user/new").await?;
@@ -288,14 +289,11 @@ impl Database {
     Ok(body)
   }
 
-  pub async fn delete_user_account(
-    &self,
-    user_id: impl Into<String> + Send,
-  ) -> Result<(), DatabaseError> {
+  pub async fn delete_user_account(&self, user_id: impl AsRef<str>) -> Result<(), DatabaseError> {
     let response = match self
       .request(RequestOptions {
         method: Method::Delete,
-        path: format!("/account/{}/spotify", user_id.into()),
+        path: format!("/account/{}/spotify", user_id.as_ref()),
         body: None,
         headers: None,
       })
@@ -315,10 +313,10 @@ impl Database {
 
   pub async fn update_user_device_name(
     &self,
-    user_id: impl Into<String>,
-    name: impl Into<String>,
+    user_id: impl AsRef<str>,
+    name: impl AsRef<str>,
   ) -> Result<(), DatabaseError> {
-    let device_name: String = name.into();
+    let device_name = name.as_ref();
 
     if device_name.len() > 16 || device_name.is_empty() {
       return Err(DatabaseError::InvalidInputBody(
@@ -331,7 +329,7 @@ impl Database {
     let response = match self
       .request(RequestOptions {
         method: Method::Patch,
-        path: format!("/user/{}", user_id.into()),
+        path: format!("/user/{}", user_id.as_ref()),
         body: Some(Body::Json(body)),
         headers: None,
       })
@@ -348,8 +346,4 @@ impl Database {
       status => Err(DatabaseError::InvalidStatusCode(status)),
     }
   }
-}
-
-impl TypeMapKey for Database {
-  type Value = Database;
 }
