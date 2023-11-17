@@ -21,7 +21,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
       .clone();
 
     let session = match session_manager
-      .get_session(command.guild_id.expect("to contain a value"))
+      .get_session(&command.guild_id.expect("to contain a value"))
       .await
     {
       Some(session) => session,

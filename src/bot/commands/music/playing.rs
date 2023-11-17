@@ -54,7 +54,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
       .clone();
 
     let Some(session) = session_manager
-      .get_session(command.guild_id.expect("to contain a value"))
+      .get_session(&command.guild_id.expect("to contain a value"))
       .await
     else {
       not_playing!();
@@ -179,7 +179,7 @@ pub fn component(ctx: Context, mut interaction: MessageComponentInteraction) -> 
 
     // Check if session still exists
     let Some(mut session) = session_manager
-      .get_session(interaction.guild_id.expect("to contain a value"))
+      .get_session(&interaction.guild_id.expect("to contain a value"))
       .await
     else {
       error_edit(
@@ -349,7 +349,7 @@ async fn update_embed(interaction: &mut MessageComponentInteraction, ctx: &Conte
 
   // Check if session still exists
   let Some(session) = session_manager
-    .get_session(interaction.guild_id.expect("to contain a value"))
+    .get_session(&interaction.guild_id.expect("to contain a value"))
     .await
   else {
     error_edit(

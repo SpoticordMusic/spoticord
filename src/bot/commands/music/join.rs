@@ -175,7 +175,7 @@ pub fn command(ctx: Context, command: ApplicationCommandInteraction) -> CommandO
       .clone();
 
     // Check if another session is already active in this server
-    let mut session_opt = session_manager.get_session(guild.id).await;
+    let mut session_opt = session_manager.get_session(&guild.id).await;
 
     if let Some(session) = &session_opt {
       if let Some(owner) = session.owner().await {

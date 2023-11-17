@@ -1,4 +1,4 @@
-use dotenv::dotenv;
+use dotenvy::dotenv;
 
 #[cfg(feature = "stats")]
 use crate::consts::KV_URL;

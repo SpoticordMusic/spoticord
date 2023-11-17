@@ -27,22 +27,24 @@ use songbird::{
   Call, Event, EventContext, EventHandler,
 };
 use std::{
-  ops::{Deref, DerefMut},
-  sync::Arc,
+  sync::{Arc, Weak},
   time::Duration,
 };
-use tokio::sync::{Mutex, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::Mutex;
 
 #[derive(Clone)]
-pub struct SpoticordSession(Arc<RwLock<InnerSpoticordSession>>);
+pub struct Session(Arc<RwLock<SessionInner>>);
 
-impl Drop for SpoticordSession {
+impl Drop for Session {
   fn drop(&mut self) {
-    log::trace!("drop SpoticordSession");
+    let strong = Arc::strong_count(&self.0);
+    let weak = Arc::weak_count(&self.0);
+
+    log::trace!("drop Session[{strong}, {weak}]");
   }
 }
 
-struct InnerSpoticordSession {
+struct SessionInner {
   owner: Option<UserId>,
   guild_id: GuildId,
   channel_id: ChannelId,
@@ -63,14 +65,14 @@ struct InnerSpoticordSession {
   disconnected: bool,
 }
 
-impl SpoticordSession {
+impl Session {
   pub async fn new(
     ctx: &Context,
     guild_id: GuildId,
     channel_id: ChannelId,
     text_channel_id: ChannelId,
     owner_id: UserId,
-  ) -> Result<SpoticordSession, SessionCreateError> {
+  ) -> Result<Session, SessionCreateError> {
     // Get the Spotify token of the owner
     let data = ctx.data.read().await;
     let session_manager = data
@@ -88,7 +90,7 @@ impl SpoticordSession {
       return Err(SessionCreateError::JoinError(why));
     }
 
-    let inner = InnerSpoticordSession {
+    let inner = SessionInner {
       owner: Some(owner_id),
       guild_id,
       channel_id,
@@ -114,12 +116,12 @@ impl SpoticordSession {
     // Set up events
     call.add_global_event(
       songbird::Event::Core(songbird::CoreEvent::DriverDisconnect),
-      instance.clone(),
+      instance.weak(),
     );
 
     call.add_global_event(
       songbird::Event::Core(songbird::CoreEvent::ClientDisconnect),
-      instance.clone(),
+      instance.weak(),
     );
 
     Ok(instance)
@@ -138,12 +140,12 @@ impl SpoticordSession {
       .clone();
 
     {
-      let mut inner = self.acquire_write().await;
+      let mut inner = self.0.write().await;
       inner.owner = Some(owner_id);
     }
 
     {
-      let guild_id = self.acquire_read().await.guild_id;
+      let guild_id = self.0.read().await.guild_id;
       session_manager.set_owner(owner_id, guild_id).await;
     }
 
@@ -155,28 +157,28 @@ impl SpoticordSession {
 
   /// Advance to the next track
   pub async fn next(&mut self) {
-    if let Some(ref player) = self.acquire_read().await.player {
+    if let Some(ref player) = self.0.read().await.player {
       player.next();
     }
   }
 
   /// Rewind to the previous track
   pub async fn previous(&mut self) {
-    if let Some(ref player) = self.acquire_read().await.player {
+    if let Some(ref player) = self.0.read().await.player {
       player.prev();
     }
   }
 
   /// Pause the current track
   pub async fn pause(&mut self) {
-    if let Some(ref player) = self.acquire_read().await.player {
+    if let Some(ref player) = self.0.read().await.player {
       player.pause();
     }
   }
 
   /// Resume the current track
   pub async fn resume(&mut self) {
-    if let Some(ref player) = self.acquire_read().await.player {
+    if let Some(ref player) = self.0.read().await.player {
       player.play();
     }
   }
@@ -243,11 +245,17 @@ impl SpoticordSession {
       };
 
     tokio::spawn({
-      let session = self.clone();
+      let session = self.weak();
 
       async move {
         loop {
-          match rx.recv().await {
+          let event = rx.recv().await;
+
+          let Some(session) = session.try_upgrade() else {
+            break;
+          };
+
+          match event {
             Ok(event) => match event {
               PlayerEvent::Pause => session.start_disconnect_timer().await,
               PlayerEvent::Play => session.stop_disconnect_timer().await,
@@ -270,7 +278,7 @@ impl SpoticordSession {
     // Start DC timer by default, as automatic device switching is now gone
     self.start_disconnect_timer().await;
 
-    let mut inner = self.acquire_write().await;
+    let mut inner = self.0.write().await;
     inner.track = Some(track_handle);
     inner.player = Some(player);
 
@@ -279,7 +287,7 @@ impl SpoticordSession {
 
   /// Called when the player must stop, but not leave the call
   async fn player_stopped(&self) {
-    let mut inner = self.acquire_write().await;
+    let mut inner = self.0.write().await;
 
     if let Some(track) = inner.track.take() {
       if let Err(why) = track.stop() {
@@ -289,7 +297,7 @@ impl SpoticordSession {
 
     // Clear owner
     if let Some(owner_id) = inner.owner.take() {
-      inner.session_manager.remove_owner(owner_id).await;
+      inner.session_manager.remove_owner(&owner_id).await;
     }
 
     // Disconnect from Spotify
@@ -317,7 +325,7 @@ impl SpoticordSession {
     //  read lock to read the current owner.
     // This would deadlock if we have an active write lock
     {
-      let mut inner = self.acquire_write().await;
+      let mut inner = self.0.write().await;
       inner.disconnect_no_abort().await;
     }
 
@@ -329,7 +337,7 @@ impl SpoticordSession {
   async fn start_disconnect_timer(&self) {
     self.stop_disconnect_timer().await;
 
-    let mut inner = self.acquire_write().await;
+    let mut inner = self.0.write().await;
 
     // Check if we are already disconnected
     if inner.disconnected {
@@ -337,7 +345,7 @@ impl SpoticordSession {
     }
 
     inner.disconnect_handle = Some(tokio::spawn({
-      let session = self.clone();
+      let session = self.weak();
 
       async move {
         let mut timer = tokio::time::interval(Duration::from_secs(DISCONNECT_TIME));
@@ -350,6 +358,10 @@ impl SpoticordSession {
 
         // Make sure this task has not been aborted, if it has this will automatically stop execution.
         tokio::task::yield_now().await;
+
+        let Some(session) = session.try_upgrade() else {
+          return;
+        };
 
         let is_playing = session
           .playback_info()
@@ -373,7 +385,7 @@ impl SpoticordSession {
 
   /// Stop the disconnect timer (if one is running)
   async fn stop_disconnect_timer(&self) {
-    let mut inner = self.acquire_write().await;
+    let mut inner = self.0.write().await;
     if let Some(handle) = inner.disconnect_handle.take() {
       handle.abort();
     }
@@ -382,7 +394,7 @@ impl SpoticordSession {
   /// Disconnect from the VC and send a message to the text channel
   pub async fn disconnect_with_message(&self, content: &str) {
     {
-      let mut inner = self.acquire_write().await;
+      let mut inner = self.0.write().await;
 
       // Firstly we disconnect
       inner.disconnect_no_abort().await;
@@ -413,93 +425,53 @@ impl SpoticordSession {
 
   /// Get the owner
   pub async fn owner(&self) -> Option<UserId> {
-    self.acquire_read().await.owner
+    self.0.read().await.owner
   }
 
   /// Get the session manager
   pub async fn session_manager(&self) -> SessionManager {
-    self.acquire_read().await.session_manager.clone()
+    self.0.read().await.session_manager.clone()
   }
 
   /// Get the guild id
   pub async fn guild_id(&self) -> GuildId {
-    self.acquire_read().await.guild_id
+    self.0.read().await.guild_id
   }
 
   /// Get the channel id
   pub async fn channel_id(&self) -> ChannelId {
-    self.acquire_read().await.channel_id
+    self.0.read().await.channel_id
   }
 
   /// Get the channel id
   #[allow(dead_code)]
   pub async fn text_channel_id(&self) -> ChannelId {
-    self.acquire_read().await.text_channel_id
+    self.0.read().await.text_channel_id
   }
 
   /// Get the playback info
   pub async fn playback_info(&self) -> Option<PlaybackInfo> {
-    let handle = self.acquire_read().await;
+    let handle = self.0.read().await;
     let player = handle.player.as_ref()?;
 
     player.pbi().await
   }
 
   pub async fn call(&self) -> Arc<Mutex<Call>> {
-    self.acquire_read().await.call.clone()
+    self.0.read().await.call.clone()
   }
 
   #[allow(dead_code)]
   pub async fn http(&self) -> Arc<Http> {
-    self.acquire_read().await.http.clone()
+    self.0.read().await.http.clone()
   }
 
-  async fn acquire_read(&self) -> ReadLock {
-    ReadLock(self.0.read().await)
-  }
-
-  async fn acquire_write(&self) -> WriteLock {
-    WriteLock(self.0.write().await)
+  pub fn weak(&self) -> SessionWeak {
+    SessionWeak(Arc::downgrade(&self.0))
   }
 }
 
-struct ReadLock<'a>(RwLockReadGuard<'a, InnerSpoticordSession>);
-
-impl<'a> Deref for ReadLock<'a> {
-  type Target = RwLockReadGuard<'a, InnerSpoticordSession>;
-
-  #[inline]
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl<'a> DerefMut for ReadLock<'a> {
-  #[inline]
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
-
-struct WriteLock<'a>(RwLockWriteGuard<'a, InnerSpoticordSession>);
-
-impl<'a> Deref for WriteLock<'a> {
-  type Target = RwLockWriteGuard<'a, InnerSpoticordSession>;
-
-  #[inline]
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl<'a> DerefMut for WriteLock<'a> {
-  #[inline]
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
-
-impl InnerSpoticordSession {
+impl SessionInner {
   /// Internal version of disconnect, which does not abort the disconnect timer
   async fn disconnect_no_abort(&mut self) {
     // Disconnect from Spotify
@@ -510,7 +482,7 @@ impl InnerSpoticordSession {
     self.disconnected = true;
     self
       .session_manager
-      .remove_session(self.guild_id, self.owner)
+      .remove_session(&self.guild_id, self.owner.as_ref())
       .await;
 
     if let Some(track) = self.track.take() {
@@ -530,28 +502,30 @@ impl InnerSpoticordSession {
 }
 
 #[async_trait]
-impl EventHandler for SpoticordSession {
+impl EventHandler for SessionWeak {
   async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+    let Some(session) = self.try_upgrade() else {
+      return Some(Event::Cancel);
+    };
+
     match ctx {
       EventContext::DriverDisconnect(_) => {
         debug!("Driver disconnected, leaving voice channel");
-        trace!("Arc strong count: {}", Arc::strong_count(&self.0));
-        self.disconnect().await;
+        session.disconnect().await;
       }
       EventContext::ClientDisconnect(who) => {
         trace!("Client disconnected, {}", who.user_id.to_string());
-        trace!("Arc strong count: {}", Arc::strong_count(&self.0));
 
-        if let Some(session) = self
+        if let Some(user_session) = session
           .session_manager()
           .await
           .find(UserId(who.user_id.0))
           .await
         {
-          if session.guild_id().await == self.guild_id().await
-            && session.channel_id().await == self.channel_id().await
+          if user_session.guild_id().await == session.guild_id().await
+            && user_session.channel_id().await == session.channel_id().await
           {
-            self.player_stopped().await;
+            session.player_stopped().await;
           }
         }
       }
@@ -562,8 +536,27 @@ impl EventHandler for SpoticordSession {
   }
 }
 
-impl Drop for InnerSpoticordSession {
+impl Drop for SessionInner {
   fn drop(&mut self) {
-    log::trace!("drop InnerSpoticordSession");
+    log::trace!("drop SessionInner");
+  }
+}
+
+pub struct SessionWeak(Weak<RwLock<SessionInner>>);
+
+impl SessionWeak {
+  #[allow(unused)]
+  pub fn upgrade(&self) -> Session {
+    self.try_upgrade().expect("cannot upgrade dropped session")
+  }
+
+  pub fn try_upgrade(&self) -> Option<Session> {
+    let ret = self.0.upgrade().map(Session);
+
+    if ret.is_none() {
+      warn!("Oh boy we've got an invalid Weak here!");
+    }
+
+    ret
   }
 }
