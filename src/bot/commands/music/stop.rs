@@ -48,7 +48,7 @@ pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
     }
   }
 
-  session.disconnect().await;
+  session.stop_player().await;
 
   ctx
     .send(|b| {

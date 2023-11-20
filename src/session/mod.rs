@@ -259,13 +259,13 @@ impl Session {
               PlayerEvent::Pause => session.start_disconnect_timer().await,
               PlayerEvent::Play => session.stop_disconnect_timer().await,
               PlayerEvent::Stopped => {
-                session.player_stopped().await;
+                session.stop_player().await;
                 break;
               }
             },
             Err(why) => {
               error!("Communication with player abruptly ended: {why}");
-              session.player_stopped().await;
+              session.stop_player().await;
 
               break;
             }
@@ -285,7 +285,7 @@ impl Session {
   }
 
   /// Called when the player must stop, but not leave the call
-  async fn player_stopped(&self) {
+  pub async fn stop_player(&self) {
     let mut inner = self.0.write().await;
 
     if let Some(track) = inner.track.take() {
@@ -524,7 +524,7 @@ impl EventHandler for SessionWeak {
           if user_session.guild_id().await == session.guild_id().await
             && user_session.channel_id().await == session.channel_id().await
           {
-            session.player_stopped().await;
+            session.stop_player().await;
           }
         }
       }
