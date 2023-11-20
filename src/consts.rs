@@ -12,16 +12,16 @@ pub const MOTD: &str = "some good 'ol music";
 pub const DISCONNECT_TIME: u64 = 5 * 60;
 
 lazy_static! {
-  pub static ref DISCORD_TOKEN: String =
-    std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN environment variable");
-  pub static ref DATABASE_URL: String =
-    std::env::var("DATABASE_URL").expect("missing DATABASE_URL environment variable");
-  pub static ref SPOTICORD_ACCOUNTS_URL: String = std::env::var("SPOTICORD_ACCOUNTS_URL")
-    .expect("missing SPOTICORD_ACCOUNTS_URL environment variable");
+    pub static ref DISCORD_TOKEN: String =
+        std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN environment variable");
+    pub static ref DATABASE_URL: String =
+        std::env::var("DATABASE_URL").expect("missing DATABASE_URL environment variable");
+    pub static ref SPOTICORD_ACCOUNTS_URL: String = std::env::var("SPOTICORD_ACCOUNTS_URL")
+        .expect("missing SPOTICORD_ACCOUNTS_URL environment variable");
 }
 
 #[cfg(feature = "stats")]
 lazy_static! {
-  pub static ref KV_URL: String =
-    std::env::var("KV_URL").expect("missing KV_URL environment variable");
+    pub static ref KV_URL: String =
+        std::env::var("KV_URL").expect("missing KV_URL environment variable");
 }

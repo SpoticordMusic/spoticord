@@ -5,7 +5,7 @@ use crate::{bot::Context, utils::embed::Color};
 /// Shows the help message
 #[poise::command(slash_command)]
 pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
-  ctx
+    ctx
     .send(|b| {
       b.embed(|f| {
         f.title("Spoticord Help")
@@ -23,5 +23,5 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
     })
     .await?;
 
-  Ok(())
+    Ok(())
 }

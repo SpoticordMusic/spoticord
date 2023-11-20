@@ -9,74 +9,73 @@ use std::io::Write;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub enum SinkEvent {
-  Start,
-  Stop,
+    Start,
+    Stop,
 }
 
 pub struct StreamSink {
-  stream: Stream,
-  sender: UnboundedSender<SinkEvent>,
+    stream: Stream,
+    sender: UnboundedSender<SinkEvent>,
 }
 
 impl StreamSink {
-  pub fn new(stream: Stream, sender: UnboundedSender<SinkEvent>) -> Self {
-    Self { stream, sender }
-  }
+    pub fn new(stream: Stream, sender: UnboundedSender<SinkEvent>) -> Self {
+        Self { stream, sender }
+    }
 }
 
 impl Sink for StreamSink {
-  fn start(&mut self) -> SinkResult<()> {
-    if let Err(why) = self.sender.send(SinkEvent::Start) {
-      // WARNING: Returning an error causes librespot-playback to exit the process with status 1
+    fn start(&mut self) -> SinkResult<()> {
+        if let Err(why) = self.sender.send(SinkEvent::Start) {
+            // WARNING: Returning an error causes librespot-playback to exit the process with status 1
 
-      return Err(SinkError::ConnectionRefused(why.to_string()));
+            return Err(SinkError::ConnectionRefused(why.to_string()));
+        }
+
+        Ok(())
     }
 
-    Ok(())
-  }
+    fn stop(&mut self) -> SinkResult<()> {
+        if let Err(why) = self.sender.send(SinkEvent::Stop) {
+            // WARNING: Returning an error causes librespot-playback to exit the process with status 1
 
-  fn stop(&mut self) -> SinkResult<()> {
-    if let Err(why) = self.sender.send(SinkEvent::Stop) {
-      // WARNING: Returning an error causes librespot-playback to exit the process with status 1
+            return Err(SinkError::ConnectionRefused(why.to_string()));
+        }
 
-      return Err(SinkError::ConnectionRefused(why.to_string()));
+        self.stream.flush().ok();
+
+        Ok(())
     }
 
-    self.stream.flush().ok();
+    fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
+        use zerocopy::AsBytes;
 
-    Ok(())
-  }
+        let AudioPacket::Samples(samples) = packet else {
+            return Ok(());
+        };
+        let samples_f32: &[f32] = &converter.f64_to_f32(&samples);
 
-  fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
-    use zerocopy::AsBytes;
+        let resampled = samplerate::convert(
+            44100,
+            48000,
+            2,
+            samplerate::ConverterType::Linear,
+            samples_f32,
+        )
+        .expect("to succeed");
 
-    let AudioPacket::Samples(samples) = packet else {
-      return Ok(());
-    };
-    let samples_f32: &[f32] = &converter.f64_to_f32(&samples);
+        self.write_bytes(resampled.as_bytes())?;
 
-    let resampled = samplerate::convert(
-      44100,
-      48000,
-      2,
-      samplerate::ConverterType::Linear,
-      samples_f32,
-    )
-    .expect("to succeed");
-
-    self.write_bytes(resampled.as_bytes())?;
-
-    Ok(())
-  }
+        Ok(())
+    }
 }
 
 impl SinkAsBytes for StreamSink {
-  fn write_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
-    self
-      .stream
-      .write_all(data)
-      .map_err(|why| SinkError::OnWrite(why.to_string()))?;
+    fn write_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
+        self.stream
+            .write_all(data)
+            .map_err(|why| SinkError::OnWrite(why.to_string()))?;
 
-    Ok(())
-  }
+        Ok(())
+    }
 }
