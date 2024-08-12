@@ -9,6 +9,7 @@
 - Added `/lyrics`, which provides the user with an auto-updating lyrics embed
 - Added `/stop`, which disconnects the bot from Spotify without leaving the call (will still leave after 5 minutes)
 - Changed `/playing` to automatically update the embed accordingly
+- Renamed `/leave` to `/disconnect`
 - Removed the Database API, replaced with direct connection to a Postgres database
 
 **Full Changelog** (good luck): https://github.com/SpoticordMusic/spoticord/compare/v2.1.2..v2.2.0

@@ -6,7 +6,7 @@ use spoticord_utils::discord::Colors;
 
 use crate::bot::Context;
 
-#[poise::command(slash_command, guild_only, aliases("leave"))]
+#[poise::command(slash_command, guild_only)]
 pub async fn disconnect(ctx: Context<'_>) -> Result<(), Error> {
     let manager = ctx.data();
     let guild = ctx.guild().expect("poise lied to me").id;
