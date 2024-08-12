@@ -1,0 +1,12 @@
+[package]
+name = "spoticord_config"
+version = "2.2.0"
+edition = "2021"
+
+[dependencies]
+lazy_static = "1.5.0"
+rspotify = { version = "0.13.2", default-features = false, features = [
+    "client-reqwest",
+    "reqwest-rustls-tls",
+] }
+serenity = "0.12.2"

@@ -1,36 +1,46 @@
 [package]
 name = "spoticord"
-version = "2.1.2"
+version = "2.2.0"
 edition = "2021"
-rust-version = "1.65.0"
+rust-version = "1.75.0"
 
 [[bin]]
 name = "spoticord"
 path = "src/main.rs"
 
+[workspace]
+members = [
+    "spoticord_audio",
+    "spoticord_config",
+    "spoticord_database",
+    "spoticord_player",
+    "spoticord_session",
+    "spoticord_utils",
+    "spoticord_stats",
+]
+
 [features]
-stats = ["redis"]
+default = ["stats"]
+stats = ["spoticord_stats"]
 
 [dependencies]
-anyhow = "1.0.75"
-dotenv = "0.15.0"
-env_logger = "0.10.0"
-hex = "0.4.3"
-lazy_static = "1.4.0"
-librespot = { version = "0.4.2", default-features = false }
-log = "0.4.20"
-protobuf = "2.28.0"
-redis = { version = "0.23.3", optional = true, default-features = false }
-reqwest = { version = "0.11.20", default-features = false }
-samplerate = "0.2.4"
-serde = "1.0.188"
-serde_json = "1.0.107"
-serenity = { version = "0.11.6", features = ["framework", "cache", "standard_framework", "rustls_backend", "gateway"], default-features = false }
-songbird = { version = "0.3.2", features = ["driver", "serenity-rustls"], default-features = false }
-thiserror = "1.0.48"
-tokio = { version = "1.32.0", features = ["rt", "full"] }
-zerocopy = "0.7.5"
+spoticord_config = { path = "./spoticord_config" }
+spoticord_database = { path = "./spoticord_database" }
+spoticord_player = { path = "./spoticord_player" }
+spoticord_session = { path = "./spoticord_session" }
+spoticord_utils = { path = "./spoticord_utils" }
+spoticord_stats = { path = "./spoticord_stats", optional = true }
+
+anyhow = "1.0.86"
+dotenvy = "0.15.7"
+env_logger = "0.11.5"
+log = "0.4.22"
+poise = "0.6.1"
+serenity = "0.12.2"
+songbird = { version = "0.4.3", features = ["simd-json"] }
+tokio = { version = "1.39.2", features = ["full"] }
 
 [profile.release]
 opt-level = 3
 lto = true
+strip = true

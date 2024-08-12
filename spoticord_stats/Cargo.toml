@@ -1,0 +1,9 @@
+[package]
+name = "spoticord_stats"
+version = "2.2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+redis = { version = "0.25.4", default-features = false }

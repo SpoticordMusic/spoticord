@@ -2,16 +2,16 @@ name: Build and push to registry
 
 on:
   push:
-    branches: [ "main", "dev" ]
-    tags: [ "v*.*.*" ]
+    branches: ["main", "dev"]
+    tags: ["v*.*.*"]
   pull_request:
-    branches: [ "main", "dev" ]
+    branches: ["main", "dev"]
   workflow_dispatch:
 
 permissions:
   packages: write
   contents: read
-      
+
 jobs:
   build-and-push:
     name: Build Docker image and push to registry
@@ -53,6 +53,15 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
 
+      - name: Inject Docker cache
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.0
+        with:
+          cache-map: |
+            {
+              "usr-local-cargo-registry": "/usr/local/cargo/registry",
+              "app-target": "/app/target"
+            }
+
       - name: Build image and push to registry
         uses: docker/build-push-action@v5
         with:
@@ -62,5 +71,6 @@ jobs:
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
           # Some basic caching of the layers...
-          cache-from: ${{ steps.repo-uri-string.outputs.lowercase }}:latest-cache
-          cache-to: ${{ steps.repo-uri-string.outputs.lowercase }}:latest-cache
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false

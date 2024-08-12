@@ -1,0 +1,11 @@
+[package]
+name = "spoticord_utils"
+version = "2.2.0"
+edition = "2021"
+
+[dependencies]
+librespot = { git = "https://github.com/SpoticordMusic/librespot.git", version = "0.5.0-dev", default-features = false }
+anyhow = "1.0.86"
+base64 = "0.22.1"
+log = "0.4.22"
+poise = "0.6.1"
