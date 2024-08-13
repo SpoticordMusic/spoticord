@@ -40,8 +40,8 @@ We make use of `rustfmt` to format our code. You can install it by running `rust
 
 We make use of the pre-commit git hook to run `clippy` before you commit your code. To set up the git hooks you can run the following command:
 
-  ```bash
-  git config core.hooksPath .githooks
-  ```
+```bash
+git config core.hooksPath .githooks
+```
 
 If you want to skip this check, you can use the `--no-verify` flag in your git commit command. Do note however that code that does not pass these checks will not be merged.

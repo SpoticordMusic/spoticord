@@ -1,152 +1,64 @@
-use dotenv::dotenv;
-
-#[cfg(feature = "stats")]
-use crate::consts::KV_URL;
-
-use crate::{
-  bot::commands::CommandManager,
-  consts::{DATABASE_URL, DISCORD_TOKEN, MOTD},
-  database::Database,
-  session::manager::SessionManager,
-};
-use log::*;
-use serenity::{framework::StandardFramework, prelude::GatewayIntents, Client};
-use songbird::SerenityInit;
-use std::{any::Any, process::exit};
-
-#[cfg(unix)]
-use tokio::signal::unix::SignalKind;
-
-mod audio;
 mod bot;
-mod consts;
-mod database;
-mod librespot_ext;
-mod player;
-mod session;
-mod utils;
+mod commands;
+// mod session;
+// mod utils;
 
-#[cfg(feature = "stats")]
-mod stats;
-
-#[cfg(feature = "stats")]
-use crate::stats::StatsManager;
+use log::{error, info};
+use poise::Framework;
+use serenity::all::ClientBuilder;
+use songbird::SerenityInit;
+use spoticord_database::Database;
 
 #[tokio::main]
 async fn main() {
-  if std::env::var("RUST_LOG").is_err() {
-    #[cfg(debug_assertions)]
+    // Setup logging
+    if std::env::var("RUST_LOG").is_err() {
+        #[cfg(debug_assertions)]
+        std::env::set_var("RUST_LOG", "spoticord");
+
+        #[cfg(not(debug_assertions))]
+        std::env::set_var("RUST_LOG", "spoticord=info");
+    }
+
+    env_logger::init();
+
+    info!("Today is a good day!");
+    info!(" - Spoticord");
+
+    dotenvy::dotenv().ok();
+
+    // Set up database
+    let database = match Database::connect().await {
+        Ok(db) => db,
+        Err(why) => {
+            error!("Failed to connect to database and perform migrations: {why}");
+            return;
+        }
+    };
+
+    // Set up bot
+    let framework = Framework::builder()
+        .setup(|ctx, ready, framework| Box::pin(bot::setup(ctx, ready, framework, database)))
+        .options(bot::framework_opts())
+        .build();
+
+    let mut client = match ClientBuilder::new(
+        spoticord_config::discord_token(),
+        spoticord_config::discord_intents(),
+    )
+    .framework(framework)
+    .register_songbird_from_config(songbird::Config::default().use_softclip(false))
+    .await
     {
-      std::env::set_var("RUST_LOG", "spoticord");
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-      std::env::set_var("RUST_LOG", "spoticord=info");
-    }
-  }
-
-  env_logger::init();
-
-  info!("It's a good day");
-  info!(" - Spoticord, {}", MOTD);
-
-  let result = dotenv();
-
-  if let Ok(path) = result {
-    debug!(
-      "Loaded environment file: {}",
-      path.to_str().expect("to get the string")
-    );
-  } else {
-    warn!("No .env file found, expecting all necessary environment variables");
-  }
-
-  #[cfg(feature = "stats")]
-  let stats_manager = StatsManager::new(KV_URL.as_str()).expect("Failed to connect to redis");
-
-  let session_manager = SessionManager::new();
-
-  // Create client
-  let mut client = Client::builder(
-    DISCORD_TOKEN.as_str(),
-    GatewayIntents::GUILDS | GatewayIntents::GUILD_VOICE_STATES,
-  )
-  .event_handler(crate::bot::events::Handler)
-  .framework(StandardFramework::new())
-  .register_songbird()
-  .await
-  .expect("to create a client");
-
-  {
-    let mut data = client.data.write().await;
-
-    data.insert::<Database>(Database::new(DATABASE_URL.as_str(), None));
-    data.insert::<CommandManager>(CommandManager::new());
-    data.insert::<SessionManager>(session_manager.clone());
-  }
-
-  let shard_manager = client.shard_manager.clone();
-
-  #[cfg(unix)]
-  let mut term: Option<Box<dyn Any + Send>> = Some(Box::new(
-    tokio::signal::unix::signal(SignalKind::terminate())
-      .expect("to be able to create the signal stream"),
-  ));
-
-  #[cfg(not(unix))]
-  let term: Option<Box<dyn Any + Send>> = None;
-
-  // Background tasks
-  tokio::spawn(async move {
-    loop {
-      tokio::select! {
-        _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-          #[cfg(feature = "stats")]
-          {
-            let active_count = session_manager.get_active_session_count().await;
-
-            if let Err(why) = stats_manager.set_active_count(active_count) {
-              error!("Failed to update active count: {why}");
-            }
-          }
+        Ok(client) => client,
+        Err(why) => {
+            error!("Fatal error when building Serenity client: {why}");
+            return;
         }
+    };
 
-        _ = tokio::signal::ctrl_c() => {
-          info!("Received interrupt signal, shutting down...");
-
-          session_manager.shutdown().await;
-          shard_manager.lock().await.shutdown_all().await;
-
-          break;
-        }
-
-        _ = async {
-          #[cfg(unix)]
-          match term {
-            Some(ref mut term) => {
-              let term = term.downcast_mut::<tokio::signal::unix::Signal>().expect("to be able to downcast");
-
-              term.recv().await
-            }
-
-            _ => None
-          }
-        }, if term.is_some() => {
-          info!("Received terminate signal, shutting down...");
-
-          session_manager.shutdown().await;
-          shard_manager.lock().await.shutdown_all().await;
-
-          break;
-        }
-      }
+    if let Err(why) = client.start_autosharded().await {
+        error!("Fatal error occured during bot operations: {why}");
+        error!("Bot will now shut down!");
     }
-  });
-
-  // Start the bot
-  if let Err(why) = client.start_autosharded().await {
-    error!("FATAL Error in bot: {:?}", why);
-    exit(1);
-  }
 }

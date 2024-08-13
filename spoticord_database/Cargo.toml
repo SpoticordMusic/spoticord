@@ -1,0 +1,18 @@
+[package]
+name = "spoticord_database"
+version = "2.2.0"
+edition = "2021"
+
+[dependencies]
+spoticord_config = { path = "../spoticord_config" }
+
+diesel = { version = "2.1.6", features = ["chrono"] }
+diesel-async = { version = "0.4.1", features = ["deadpool", "postgres"] }
+rspotify = { version = "0.13.2", default-features = false, features = [
+    "client-reqwest",
+    "reqwest-rustls-tls",
+] }
+chrono = "0.4.38"
+thiserror = "1.0.63"
+rand = "0.8.5"
+diesel_async_migrations = "0.12.0"
