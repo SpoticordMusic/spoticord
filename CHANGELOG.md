@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.0 | TBD
+## 2.2.0 | August 8th 2024
 
 ### Changes
 
