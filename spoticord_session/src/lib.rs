@@ -516,6 +516,11 @@ impl songbird::EventHandler for SessionHandle {
             }
 
             EventContext::ClientDisconnect(ClientDisconnect { user_id }) => {
+                // Ignore disconnects if we're inactive
+                if !self.active().await.unwrap_or(false) {
+                    return None;
+                }
+
                 match self.owner().await {
                     Ok(id) if id.get() == user_id.0 => {
                         debug!("Owner of session disconnected, stopping playback");

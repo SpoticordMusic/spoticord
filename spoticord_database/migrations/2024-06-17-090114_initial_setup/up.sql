@@ -1,10 +1,17 @@
--- Trigger functions
+-- Functions
 
 CREATE OR REPLACE FUNCTION update_last_updated_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.last_updated = NOW();
     RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION delete_inactive_accounts() RETURNS void AS $$
+BEGIN
+    DELETE FROM account
+    WHERE last_updated < NOW() - INTERVAL '2 months';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -20,7 +27,7 @@ CREATE TABLE "link_request" (
     user_id TEXT UNIQUE NOT NULL,
     expires TIMESTAMP NOT NULL,
 
-    CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES "user" (id)
+    CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES "user" (id) ON DELETE CASCADE
 );
 
 CREATE TABLE "account" (
@@ -32,7 +39,7 @@ CREATE TABLE "account" (
     expires TIMESTAMP NOT NULL,
     last_updated TIMESTAMP NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT fk_account_user_id FOREIGN KEY (user_id) REFERENCES "user" (id)
+    CONSTRAINT fk_account_user_id FOREIGN KEY (user_id) REFERENCES "user" (id) ON DELETE CASCADE
 );
 
 -- Triggers

@@ -9,7 +9,11 @@ use crate::bot::{Context, FrameworkError};
 
 /// Unlink your Spotify account from Spoticord
 #[poise::command(slash_command, on_error = on_error)]
-pub async fn unlink(ctx: Context<'_>) -> Result<()> {
+pub async fn unlink(
+    ctx: Context<'_>,
+
+    #[description = "Also delete Discord account information"] user_data: Option<bool>,
+) -> Result<()> {
     let manager = ctx.data();
     let db = manager.database();
     let user_id = ctx.author().id.to_string();
@@ -19,7 +23,14 @@ pub async fn unlink(ctx: Context<'_>) -> Result<()> {
         session.shutdown_player().await;
     }
 
-    if db.delete_account(&user_id).await? == 0 {
+    let deleted_account = db.delete_account(&user_id).await? != 0;
+    let deleted_user = if user_data.unwrap_or(false) {
+        db.delete_user(&user_id).await? != 0
+    } else {
+        false
+    };
+
+    if !deleted_account && !deleted_user {
         ctx.send(
             CreateReply::default()
                 .embed(

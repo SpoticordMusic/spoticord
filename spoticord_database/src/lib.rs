@@ -61,16 +61,16 @@ impl Database {
         Ok(result)
     }
 
-    pub async fn delete_user(&self, user_id: impl AsRef<str>) -> Result<()> {
+    pub async fn delete_user(&self, user_id: impl AsRef<str>) -> Result<usize> {
         use schema::user::dsl::*;
 
         let mut connection = self.0.get().await?;
-        diesel::delete(user)
+        let affected = diesel::delete(user)
             .filter(id.eq(user_id.as_ref()))
             .execute(&mut connection)
             .await?;
 
-        Ok(())
+        Ok(affected)
     }
 
     pub async fn get_or_create_user(&self, user_id: impl AsRef<str>) -> Result<User> {
