@@ -1,6 +1,11 @@
 # Changelog
 
-## 2.2.0 | TBD
+## 2.2.1 | TBD
+
+- Fixed a bug where uncached guilds would panic the bot
+- Fixed small issue with embed styling
+
+## 2.2.0 | August 13th 2024
 
 ### Changes
 
