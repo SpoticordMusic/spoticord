@@ -278,7 +278,7 @@ impl Session {
             PlayerEvent::TrackChanged(_) => {}
         }
 
-        let force_edit = matches!(event, PlayerEvent::TrackChanged(_));
+        let force_edit = !matches!(event, PlayerEvent::TrackChanged(_));
 
         if let Some(playback_embed) = &self.playback_embed {
             if playback_embed.invoke_update(force_edit).await.is_err() {
