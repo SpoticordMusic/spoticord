@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Add extra build dependencies here
 RUN apt-get update && apt-get install -yqq \
-    cmake gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+    cmake gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libpq-dev
 
 COPY . .
 

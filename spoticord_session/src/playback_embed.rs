@@ -407,23 +407,23 @@ fn build_embed(playback_info: &PlaybackInfo, owner: &User) -> CreateEmbed {
     }
 
     if let Some(album_name) = playback_info.album_name() {
-        description += &format!("In album: **{album_name}**\n\n");
-    } else {
-        description += "\n";
+        description += &format!("Album: **{album_name}**\n");
     }
 
     if let Some(show_name) = playback_info.show_name() {
-        description += &format!("On {show_name}\n\n");
+        description += &format!("On {show_name}\n");
     }
+
+    description += "\n";
 
     let position = playback_info.current_position();
     let index = position * 20 / playback_info.duration();
 
-    description.push_str(if playback_info.playing() {
+    description += if playback_info.playing() {
         "▶️ "
     } else {
         "⏸️ "
-    });
+    };
 
     for i in 0..20 {
         if i == index {
@@ -433,12 +433,12 @@ fn build_embed(playback_info: &PlaybackInfo, owner: &User) -> CreateEmbed {
         }
     }
 
-    description.push_str("\n:alarm_clock: ");
-    description.push_str(&format!(
+    description += "\n:alarm_clock: ";
+    description += &format!(
         "{} / {}",
         spoticord_utils::time_to_string(position / 1000),
         spoticord_utils::time_to_string(playback_info.duration() / 1000)
-    ));
+    );
 
     CreateEmbed::new()
         .author(
