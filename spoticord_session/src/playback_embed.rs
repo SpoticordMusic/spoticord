@@ -25,8 +25,13 @@ pub enum Command {
 #[derive(Debug, Default, ChoiceParameter)]
 pub enum UpdateBehavior {
     #[default]
+    #[name = "Automatically update the embed"]
     Default,
+
+    #[name = "Do not update the embed"]
     Static,
+
+    #[name = "Re-send the embed after track changes"]
     Pinned,
 }
 

@@ -1,5 +1,5 @@
 # Builder
-FROM --platform=linux/amd64 rust:1.79.0-buster AS builder
+FROM --platform=linux/amd64 rust:1.80.1-slim AS builder
 
 WORKDIR /app
 

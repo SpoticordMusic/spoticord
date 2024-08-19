@@ -2,8 +2,12 @@
 
 ## 2.2.1 | TBD
 
+- Added new option: `/playing` can now receive an updating behavior parameter
 - Fixed a bug where uncached guilds would panic the bot
 - Fixed small issue with embed styling
+- Updated to Rust 1.80.1 (from 1.79.0)
+- Removed `lazy_static` in favor of `LazyLock` (Rust 1.80.0+ feature)
+- Updated `diesel` and addons to latest versions
 
 ## 2.2.0 | August 13th 2024
 
