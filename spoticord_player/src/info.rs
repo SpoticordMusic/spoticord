@@ -65,6 +65,13 @@ impl PlaybackInfo {
         }
     }
 
+    pub fn album_name(&self) -> Option<String> {
+        match &self.audio_item.unique_fields {
+            UniqueFields::Episode { .. } => None,
+            UniqueFields::Track { album, .. } => Some(album.to_string()),
+        }
+    }
+
     pub fn thumbnail(&self) -> String {
         self.audio_item
             .covers

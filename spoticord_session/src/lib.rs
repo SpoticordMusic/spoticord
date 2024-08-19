@@ -31,7 +31,11 @@ pub enum SessionCommand {
     GetPlayer(oneshot::Sender<PlayerHandle>),
     GetActive(oneshot::Sender<bool>),
 
-    CreatePlaybackEmbed(SessionHandle, CommandInteraction),
+    CreatePlaybackEmbed(
+        SessionHandle,
+        CommandInteraction,
+        playback_embed::UpdateBehavior,
+    ),
     CreateLyricsEmbed(SessionHandle, CommandInteraction),
 
     Reactivate(UserId, oneshot::Sender<Result<()>>),
@@ -207,8 +211,8 @@ impl Session {
             SessionCommand::GetPlayer(sender) => _ = sender.send(self.player.clone()),
             SessionCommand::GetActive(sender) => _ = sender.send(self.active),
 
-            SessionCommand::CreatePlaybackEmbed(handle, interaction) => {
-                match PlaybackEmbed::create(self, handle, interaction).await {
+            SessionCommand::CreatePlaybackEmbed(handle, interaction, behavior) => {
+                match PlaybackEmbed::create(self, handle, interaction, behavior).await {
                     Ok(Some(playback_embed)) => {
                         self.playback_embed = Some(playback_embed);
                     }
@@ -274,8 +278,10 @@ impl Session {
             PlayerEvent::TrackChanged(_) => {}
         }
 
+        let force_edit = matches!(event, PlayerEvent::TrackChanged(_));
+
         if let Some(playback_embed) = &self.playback_embed {
-            if playback_embed.invoke_update().await.is_err() {
+            if playback_embed.invoke_update(force_edit).await.is_err() {
                 self.playback_embed = None;
             }
         }
@@ -457,11 +463,16 @@ impl SessionHandle {
     /// Create a playback embed as a response to an interaction
     ///
     /// This playback embed will automatically update when certain events happen
-    pub async fn create_playback_embed(&self, interaction: CommandInteraction) -> Result<()> {
+    pub async fn create_playback_embed(
+        &self,
+        interaction: CommandInteraction,
+        behavior: playback_embed::UpdateBehavior,
+    ) -> Result<()> {
         self.commands
             .send(SessionCommand::CreatePlaybackEmbed(
                 self.clone(),
                 interaction,
+                behavior,
             ))
             .await?;
 
