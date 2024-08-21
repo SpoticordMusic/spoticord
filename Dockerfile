@@ -8,7 +8,7 @@
 # as using QEMU to compile takes way too long (multiple hours)
 
 # Builder
-FROM --platform=linux/amd64 rust:1.80.1-bullseye AS builder
+FROM --platform=linux/amd64 rust:1.80.1-slim AS builder
 
 WORKDIR /app
 
@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp /app/target/aarch64-unknown-linux-gnu/release/spoticord /app/aarch64
 
 # Runtime
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 ARG TARGETPLATFORM
 ENV TARGETPLATFORM=${TARGETPLATFORM}
