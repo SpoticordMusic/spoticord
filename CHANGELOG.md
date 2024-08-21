@@ -7,8 +7,9 @@
 - Fixed a bug where uncached guilds would panic the bot
 - Fixed small issue with embed styling
 - Updated to Rust 1.80.1 (from 1.79.0)
-- Removed `lazy_static` in favor of `LazyLock` (Rust 1.80.0+ feature)
 - Updated `diesel` and addons to latest versions
+- Removed `lazy_static` in favor of `LazyLock` (Rust 1.80.0+ feature)
+- Bumped MSRV to 1.80.0 due to the introduction of `LazyLock`
 
 ## 2.2.0 | August 13th 2024
 
