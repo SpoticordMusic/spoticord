@@ -213,10 +213,9 @@ impl Session {
 
             SessionCommand::CreatePlaybackEmbed(handle, interaction, behavior) => {
                 match PlaybackEmbed::create(self, handle, interaction, behavior).await {
-                    Ok(Some(playback_embed)) => {
-                        self.playback_embed = Some(playback_embed);
+                    Ok(opt_handle) => {
+                        self.playback_embed = opt_handle;
                     }
-                    Ok(None) => {}
                     Err(why) => {
                         error!("Failed to create playing embed: {why}");
                     }
