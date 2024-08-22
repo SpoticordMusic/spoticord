@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.1 | TBD
+## 2.2.1 | August 22nd 2024
 
 - Added new option: `/playing` can now receive an updating behavior parameter
 - Added album name to `/playing` embed
