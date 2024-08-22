@@ -304,21 +304,19 @@ impl PlaybackEmbed {
                     return ControlFlow::Break(());
                 }
             };
-        } else {
-            if let Err(why) = self
-                .message
-                .edit(
-                    &self.ctx,
-                    EditMessage::new()
-                        .embed(build_embed(&playback_info, &owner))
-                        .components(vec![build_buttons(self.id, playback_info.playing())]),
-                )
-                .await
-            {
-                error!("Failed to update playback embed: {why}");
+        } else if let Err(why) = self
+            .message
+            .edit(
+                &self.ctx,
+                EditMessage::new()
+                    .embed(build_embed(&playback_info, &owner))
+                    .components(vec![build_buttons(self.id, playback_info.playing())]),
+            )
+            .await
+        {
+            error!("Failed to update playback embed: {why}");
 
-                return ControlFlow::Break(());
-            }
+            return ControlFlow::Break(());
         }
 
         self.last_update = Instant::now();
