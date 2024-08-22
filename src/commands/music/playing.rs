@@ -1,16 +1,21 @@
 use anyhow::Result;
 use poise::CreateReply;
 use serenity::all::CreateEmbed;
-use spoticord_session::manager::SessionQuery;
+use spoticord_session::{manager::SessionQuery, playback_embed::UpdateBehavior};
 use spoticord_utils::discord::Colors;
 
 use crate::bot::Context;
 
 /// Show details of the current song that is being played
 #[poise::command(slash_command, guild_only)]
-pub async fn playing(ctx: Context<'_>) -> Result<()> {
+pub async fn playing(
+    ctx: Context<'_>,
+    #[description = "How Spoticord should update this information"] update_behavior: Option<
+        UpdateBehavior,
+    >,
+) -> Result<()> {
     let manager = ctx.data();
-    let guild = ctx.guild().expect("poise lied to me").id;
+    let guild = ctx.guild_id().expect("poise lied to me");
 
     let Some(session) = manager.get_session(SessionQuery::Guild(guild)) else {
         ctx.send(
@@ -33,7 +38,10 @@ pub async fn playing(ctx: Context<'_>) -> Result<()> {
     };
 
     session
-        .create_playback_embed(context.interaction.clone())
+        .create_playback_embed(
+            context.interaction.clone(),
+            update_behavior.unwrap_or_default(),
+        )
         .await?;
 
     Ok(())

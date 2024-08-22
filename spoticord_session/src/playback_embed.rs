@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Result};
 use log::{error, trace};
+use poise::ChoiceParameter;
 use serenity::{
     all::{
         ButtonStyle, CommandInteraction, ComponentInteraction, ComponentInteractionCollector,
         Context, CreateActionRow, CreateButton, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
         CreateInteractionResponse, CreateInteractionResponseFollowup,
-        CreateInteractionResponseMessage, EditMessage, Message, User,
+        CreateInteractionResponseMessage, CreateMessage, EditMessage, Message, User,
     },
     futures::StreamExt,
 };
@@ -18,7 +19,30 @@ use crate::{Session, SessionHandle};
 
 #[derive(Debug)]
 pub enum Command {
-    InvokeUpdate,
+    InvokeUpdate(bool),
+}
+
+#[derive(Debug, Default, ChoiceParameter)]
+pub enum UpdateBehavior {
+    #[default]
+    #[name = "Automatically update the embed"]
+    Default,
+
+    #[name = "Do not update the embed"]
+    Static,
+
+    #[name = "Re-send the embed after track changes"]
+    Pinned,
+}
+
+impl UpdateBehavior {
+    pub fn is_static(&self) -> bool {
+        matches!(self, Self::Static)
+    }
+
+    pub fn is_pinned(&self) -> bool {
+        matches!(self, Self::Pinned)
+    }
 }
 
 pub struct PlaybackEmbed {
@@ -29,6 +53,8 @@ pub struct PlaybackEmbed {
 
     last_update: Instant,
     update_in: Option<Duration>,
+    force_edit: bool,
+    update_behavior: UpdateBehavior,
 
     rx: mpsc::Receiver<Command>,
 }
@@ -38,6 +64,7 @@ impl PlaybackEmbed {
         session: &Session,
         handle: SessionHandle,
         interaction: CommandInteraction,
+        update_behavior: UpdateBehavior,
     ) -> Result<Option<PlaybackEmbedHandle>> {
         let ctx = session.context.clone();
 
@@ -69,6 +96,11 @@ impl PlaybackEmbed {
             )
             .await?;
 
+        // If this is a static embed, we don't need to return any handles
+        if update_behavior.is_static() {
+            return Ok(None);
+        }
+
         // Retrieve message instead of editing interaction response, as those tokens are only valid for 15 minutes
         let message = interaction.get_response(&ctx).await?;
 
@@ -84,6 +116,8 @@ impl PlaybackEmbed {
             message,
             last_update: Instant::now(),
             update_in: None,
+            force_edit: false,
+            update_behavior,
             rx,
         };
 
@@ -121,7 +155,7 @@ impl PlaybackEmbed {
                         tokio::time::sleep(update_in).await;
                     }
                 }, if self.update_in.is_some() => {
-                    if self.update_embed().await.is_break() {
+                    if self.update_embed(self.force_edit).await.is_break() {
                         break;
                     }
                 }
@@ -133,15 +167,16 @@ impl PlaybackEmbed {
         trace!("Received command: {command:?}");
 
         match command {
-            Command::InvokeUpdate => {
+            Command::InvokeUpdate(force_edit) => {
                 if self.last_update.elapsed() < Duration::from_secs(2) {
                     if self.update_in.is_some() {
                         return ControlFlow::Continue(());
                     }
 
                     self.update_in = Some(Duration::from_secs(2) - self.last_update.elapsed());
+                    self.force_edit = force_edit;
                 } else {
-                    self.update_embed().await?;
+                    self.update_embed(force_edit).await?;
                 }
             }
         }
@@ -216,7 +251,7 @@ impl PlaybackEmbed {
         Ok((player, playback_info, owner))
     }
 
-    async fn update_embed(&mut self) -> ControlFlow<(), ()> {
+    async fn update_embed(&mut self, force_edit: bool) -> ControlFlow<(), ()> {
         self.update_in = None;
 
         let Ok(owner) = self.session.owner().await else {
@@ -246,7 +281,30 @@ impl PlaybackEmbed {
             }
         };
 
-        if let Err(why) = self
+        let should_pin = !force_edit && self.update_behavior.is_pinned();
+
+        if should_pin {
+            self.message.delete(&self.ctx).await.ok();
+
+            match self
+                .message
+                .channel_id
+                .send_message(
+                    &self.ctx,
+                    CreateMessage::new()
+                        .embed(build_embed(&playback_info, &owner))
+                        .components(vec![build_buttons(self.id, playback_info.playing())]),
+                )
+                .await
+            {
+                Ok(message) => self.message = message,
+                Err(why) => {
+                    error!("Failed to update playback embed: {why}");
+
+                    return ControlFlow::Break(());
+                }
+            };
+        } else if let Err(why) = self
             .message
             .edit(
                 &self.ctx,
@@ -259,7 +317,7 @@ impl PlaybackEmbed {
             error!("Failed to update playback embed: {why}");
 
             return ControlFlow::Break(());
-        };
+        }
 
         self.last_update = Instant::now();
 
@@ -267,6 +325,18 @@ impl PlaybackEmbed {
     }
 
     async fn update_not_playing(&mut self) -> Result<()> {
+        // If pinned, try to delete old message and send new one
+        if self.update_behavior.is_pinned() {
+            self.message.delete(&self.ctx).await.ok();
+            self.message = self
+                .message
+                .channel_id
+                .send_message(&self.ctx, CreateMessage::new().embed(not_playing_embed()))
+                .await?;
+
+            return Ok(());
+        }
+
         self.message
             .edit(&self.ctx, EditMessage::new().embed(not_playing_embed()))
             .await?;
@@ -284,8 +354,8 @@ impl PlaybackEmbedHandle {
         !self.tx.is_closed()
     }
 
-    pub async fn invoke_update(&self) -> Result<()> {
-        self.tx.send(Command::InvokeUpdate).await?;
+    pub async fn invoke_update(&self, force_edit: bool) -> Result<()> {
+        self.tx.send(Command::InvokeUpdate(force_edit)).await?;
 
         Ok(())
     }
@@ -331,21 +401,27 @@ fn build_embed(playback_info: &PlaybackInfo, owner: &User) -> CreateEmbed {
             .collect::<Vec<_>>()
             .join(", ");
 
-        description += &format!("By {artists}\n\n");
+        description += &format!("By {artists}\n");
+    }
+
+    if let Some(album_name) = playback_info.album_name() {
+        description += &format!("Album: **{album_name}**\n");
     }
 
     if let Some(show_name) = playback_info.show_name() {
-        description += &format!("On {show_name}\n\n");
+        description += &format!("On {show_name}\n");
     }
+
+    description += "\n";
 
     let position = playback_info.current_position();
     let index = position * 20 / playback_info.duration();
 
-    description.push_str(if playback_info.playing() {
+    description += if playback_info.playing() {
         "▶️ "
     } else {
         "⏸️ "
-    });
+    };
 
     for i in 0..20 {
         if i == index {
@@ -355,12 +431,12 @@ fn build_embed(playback_info: &PlaybackInfo, owner: &User) -> CreateEmbed {
         }
     }
 
-    description.push_str("\n:alarm_clock: ");
-    description.push_str(&format!(
+    description += "\n:alarm_clock: ";
+    description += &format!(
         "{} / {}",
         spoticord_utils::time_to_string(position / 1000),
         spoticord_utils::time_to_string(playback_info.duration() / 1000)
-    ));
+    );
 
     CreateEmbed::new()
         .author(

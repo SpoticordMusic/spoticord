@@ -4,7 +4,7 @@ use anyhow::Result;
 use log::error;
 use poise::CreateReply;
 use serenity::all::{
-    Channel, ChannelId, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, Guild, UserId,
+    Channel, ChannelId, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, UserId,
 };
 use spoticord_database::error::DatabaseError;
 use spoticord_session::manager::SessionQuery;
@@ -15,8 +15,29 @@ use crate::bot::Context;
 /// Join the current voice channel
 #[poise::command(slash_command, guild_only)]
 pub async fn join(ctx: Context<'_>) -> Result<()> {
-    let guild: Guild = ctx.guild().expect("poise lied to me").clone();
+    let guild = ctx.guild_id().expect("poise lied to me");
     let manager = ctx.data();
+
+    let Some(guild) = guild
+        .to_guild_cached(ctx.serenity_context())
+        .map(|guild| guild.clone())
+    else {
+        error!("Unable to fetch guild from cache, how did we get here?");
+
+        ctx.send(
+            CreateReply::default()
+                .embed(
+                    CreateEmbed::new()
+                        .title("An error occured")
+                        .description("This server hasn't been cached yet?")
+                        .color(Colors::Error),
+                )
+                .ephemeral(true),
+        )
+        .await?;
+
+        return Ok(());
+    };
 
     let Some(channel) = guild
         .voice_states
@@ -98,8 +119,6 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
         return Ok(());
     }
 
-    ctx.defer().await?;
-
     let mut session_opt = manager.get_session(SessionQuery::Guild(guild.id));
 
     // Check if this server already has a session active
@@ -134,7 +153,8 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
                             "You are already using Spoticord in `{}`\n\n\
                             Stop playing in that server first before starting a new session.",
                             spoticord_utils::discord::escape(server_name)
-                        )),
+                        ))
+                        .color(Colors::Error),
                 )
                 .ephemeral(true),
         )
@@ -142,6 +162,8 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
 
         return Ok(());
     }
+
+    ctx.defer().await?;
 
     if let Some(session) = &session_opt {
         if session.voice_channel() != channel {
@@ -163,7 +185,7 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
                         CreateEmbed::new()
                             .title("Failed to reactivate session")
                             .description(
-                                "An error occured whilst trying to reactivate the session.",
+                                "An error occured whilst trying to reactivate the session. Please try again.",
                             )
                             .color(Colors::Error),
                     )
@@ -190,7 +212,9 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
                 .embed(
                     CreateEmbed::new()
                         .title("Failed to create session")
-                        .description("An error occured whilst trying to create a session.")
+                        .description(
+                            "An error occured whilst trying to create a session. Please try again.",
+                        )
                         .color(Colors::Error),
                 )
                 .ephemeral(true),
