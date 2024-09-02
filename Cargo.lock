@@ -3738,7 +3738,7 @@ dependencies = [
 
 [[package]]
 name = "spoticord"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "anyhow",
  "dotenvy",
@@ -3758,7 +3758,7 @@ dependencies = [
 
 [[package]]
 name = "spoticord_audio"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "librespot",
  "songbird",
@@ -3805,7 +3805,7 @@ dependencies = [
 
 [[package]]
 name = "spoticord_session"
-version = "2.2.0"
+version = "2.2.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3823,14 +3823,14 @@ dependencies = [
 
 [[package]]
 name = "spoticord_stats"
-version = "2.2.0"
+version = "2.2.2"
 dependencies = [
  "redis",
 ]
 
 [[package]]
 name = "spoticord_utils"
-version = "2.2.0"
+version = "2.2.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

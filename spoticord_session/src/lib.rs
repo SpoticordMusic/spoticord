@@ -132,7 +132,7 @@ impl Session {
                 // Leave call on error, otherwise bot will be stuck in call forever until manually disconnected or taken over
                 _ = call.lock().await.leave().await;
 
-                error!("Failed to create player: {why}");
+                error!("Failed to create player: {why}\n{}", why.backtrace());
 
                 return Err(why);
             }
