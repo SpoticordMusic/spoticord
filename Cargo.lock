@@ -3768,7 +3768,7 @@ dependencies = [
 
 [[package]]
 name = "spoticord_config"
-version = "2.2.0"
+version = "2.2.2"
 dependencies = [
  "rspotify",
  "serenity",
@@ -3776,7 +3776,7 @@ dependencies = [
 
 [[package]]
 name = "spoticord_database"
-version = "2.2.0"
+version = "2.2.2"
 dependencies = [
  "chrono",
  "diesel",
@@ -3790,7 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "spoticord_player"
-version = "2.2.0"
+version = "2.2.2"
 dependencies = [
  "anyhow",
  "hex",
