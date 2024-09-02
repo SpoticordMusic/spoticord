@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2 | September 2nd 2024
+
+- Added backtrace logging to player creation to figure out some mystery crashes
+
 ## 2.2.1 | August 22nd 2024
 
 - Added new option: `/playing` can now receive an updating behavior parameter
