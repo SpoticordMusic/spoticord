@@ -101,18 +101,36 @@ impl Player {
         );
         let rx_player = player.get_player_event_channel();
 
-        let (spirc, spirc_task) = Spirc::new(
-            ConnectConfig {
-                name: device_name.into(),
-                initial_volume: Some((0.75f32 * u16::MAX as f32) as u16),
-                ..Default::default()
-            },
-            session.clone(),
-            credentials,
-            player,
-            mixer,
-        )
-        .await?;
+        let device_name = device_name.into();
+        let mut tries = 0;
+
+        let (spirc, spirc_task) = loop {
+            match Spirc::new(
+                ConnectConfig {
+                    name: device_name.clone(),
+                    initial_volume: Some((0.75f32 * u16::MAX as f32) as u16),
+                    ..Default::default()
+                },
+                session.clone(),
+                credentials.clone(),
+                player.clone(),
+                mixer.clone(),
+            )
+            .await
+            {
+                Ok(spirc) => break spirc,
+                Err(why) => {
+                    tries += 1;
+                    if tries > 3 {
+                        error!("Failed to connect to Spirc: {why}");
+
+                        return Err(why.into());
+                    }
+
+                    continue;
+                }
+            }
+        };
 
         let (tx, rx) = mpsc::channel(16);
         let player = Self {

@@ -1,6 +1,6 @@
 [package]
 name = "spoticord_utils"
-version = "2.2.2"
+version = "2.2.3"
 edition = "2021"
 
 [dependencies]
@@ -9,3 +9,4 @@ anyhow = "1.0.86"
 base64 = "0.22.1"
 log = "0.4.22"
 poise = "0.6.1"
+tokio = { version = "1.40.0", features = ["time"], default-features = false }

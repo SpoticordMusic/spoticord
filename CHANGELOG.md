@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.3 | September 20th 2024
+
+- Made backend changes to librespot to prevent deadlocking by not waiting for thread shutdowns
+- Added retrying to Spotify login logic to reduce the chance of the bot failing to connect
+
 ## 2.2.2 | September 2nd 2024
 
 - Added backtrace logging to player creation to figure out some mystery crashes

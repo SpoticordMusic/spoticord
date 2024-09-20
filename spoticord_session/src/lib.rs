@@ -101,18 +101,36 @@ impl Session {
 
         // Grab user credentials and info before joining call
         let credentials =
-            retrieve_credentials(&session_manager.database(), owner.to_string()).await?;
-        let device_name = session_manager
-            .database()
-            .get_user(owner.to_string())
-            .await?
-            .device_name;
+            match retrieve_credentials(&session_manager.database(), owner.to_string()).await {
+                Ok(credentials) => credentials,
+                Err(why) => {
+                    error!("Failed to retrieve credentials: {why}");
+
+                    return Err(why.into());
+                }
+            };
+        let device_name = match session_manager.database().get_user(owner.to_string()).await {
+            Ok(user) => user.device_name,
+            Err(why) => {
+                error!("Failed to get database user: {why}");
+
+                return Err(why.into());
+            }
+        };
 
         // Hello Discord I'm here
-        let call = session_manager
+        let call = match session_manager
             .songbird()
             .join(guild_id, voice_channel_id)
-            .await?;
+            .await
+        {
+            Ok(call) => call,
+            Err(why) => {
+                error!("Failed to join voice channel: {why}");
+
+                return Err(why.into());
+            }
+        };
 
         // Make sure call guard is dropped or else we can't execute session.run
         {
@@ -173,6 +191,8 @@ impl Session {
         loop {
             tokio::select! {
                 opt_command = self.commands.recv() => {
+                    trace!("Received command: {opt_command:#?}");
+
                     let Some(command) = opt_command else {
                         break;
                     };
@@ -183,6 +203,8 @@ impl Session {
                 },
 
                 opt_event = self.events.recv(), if self.active => {
+                    trace!("Received event: {opt_event:#?}");
+
                     let Some(event) = opt_event else {
                         self.shutdown_player().await;
                         continue;
@@ -193,6 +215,8 @@ impl Session {
 
                 // Internal communication channel
                 Some(command) = self.commands_inner_rx.recv() => {
+                    trace!("Received internal command: {command:#?}");
+
                     if self.handle_command(command).await.is_break() {
                         break;
                     }
@@ -201,6 +225,8 @@ impl Session {
                 else => break,
             }
         }
+
+        trace!("End of Session::run");
     }
 
     async fn handle_command(&mut self, command: SessionCommand) -> ControlFlow<(), ()> {
@@ -519,8 +545,10 @@ impl songbird::EventHandler for SessionHandle {
         }
 
         match event {
+            // NOTE: Discord can randomly make the driver disconnect when users join/leave the voice channel
+            // Nothing we can do about it at this time since that is an issue with either Discord or Songbird
             EventContext::DriverDisconnect(_) => {
-                debug!("Bot disconnected from call, cleaning up");
+                debug!("Bot disconnected from voice gateway, cleaning up");
 
                 self.disconnect().await;
             }

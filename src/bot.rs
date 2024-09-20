@@ -17,11 +17,6 @@ pub type FrameworkError<'a> = poise::FrameworkError<'a, Data, anyhow::Error>;
 
 type Data = SessionManager;
 
-// pub struct Data {
-//     pub database: Database,
-//     pub session_manager: SessionManager,
-// }
-
 pub fn framework_opts() -> FrameworkOptions<Data, anyhow::Error> {
     poise::FrameworkOptions {
         commands: vec![
@@ -111,14 +106,14 @@ async fn background_loop(
     #[cfg(feature = "stats")] mut stats_manager: spoticord_stats::StatsManager,
 ) {
     #[cfg(feature = "stats")]
-    use log::{error, trace};
+    use log::error;
 
     loop {
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
                 #[cfg(feature = "stats")]
                 {
-                    trace!("Retrieving active sessions count for stats");
+                    debug!("Retrieving active sessions count for stats");
 
                     let mut count = 0;
 
@@ -131,7 +126,7 @@ async fn background_loop(
                     if let Err(why) = stats_manager.set_active_count(count) {
                         error!("Failed to update active sessions: {why}");
                     } else {
-                        trace!("Active session count set to: {count}");
+                        debug!("Active session count set to: {count}");
                     }
                 }
             }
