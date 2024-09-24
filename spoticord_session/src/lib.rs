@@ -301,6 +301,22 @@ impl Session {
             PlayerEvent::Pause => self.start_timeout(),
             PlayerEvent::Stopped => self.shutdown_player().await,
             PlayerEvent::TrackChanged(_) => {}
+            PlayerEvent::ConnectionReset => {
+                self.disconnect().await;
+
+                _ = self
+                    .text_channel
+                    .send_message(
+                        &self.context,
+                        CreateMessage::new().embed(
+                            CreateEmbed::new()
+                                .title("Spotify connection lost")
+                                .description("The bot has lost connection to the Spotify AP servers.\nThis is most likely caused by a connection reset on Spotify's end.\n\nUse `/join` to resummon the bot to your voice channel.")
+                                .color(Colors::Error),
+                        ),
+                    )
+                    .await;
+            }
         }
 
         let force_edit = !matches!(event, PlayerEvent::TrackChanged(_));
