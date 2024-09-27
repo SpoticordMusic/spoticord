@@ -106,7 +106,7 @@ impl Session {
                 Err(why) => {
                     error!("Failed to retrieve credentials: {why}");
 
-                    return Err(why.into());
+                    return Err(why);
                 }
             };
         let device_name = match session_manager.database().get_user(owner.to_string()).await {
@@ -616,7 +616,7 @@ async fn retrieve_credentials(database: &Database, owner: impl AsRef<str>) -> Re
         None => {
             let access_token = database.get_access_token(&account.user_id).await?;
             let credentials = spotify::request_session_token(Credentials {
-                username: account.username.clone(),
+                username: Some(account.username.to_string()),
                 auth_type: AuthenticationType::AUTHENTICATION_SPOTIFY_TOKEN,
                 auth_data: access_token.into_bytes(),
             })
@@ -632,7 +632,7 @@ async fn retrieve_credentials(database: &Database, owner: impl AsRef<str>) -> Re
     };
 
     Ok(Credentials {
-        username: account.username,
+        username: Some(account.username),
         auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS,
         auth_data: BASE64.decode(token)?,
     })

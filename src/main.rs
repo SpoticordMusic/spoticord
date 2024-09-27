@@ -1,7 +1,5 @@
 mod bot;
 mod commands;
-// mod session;
-// mod utils;
 
 use log::{error, info};
 use poise::Framework;
@@ -11,6 +9,11 @@ use spoticord_database::Database;
 
 #[tokio::main]
 async fn main() {
+    // Force aws-lc-rs as default crypto provider
+    // Since multiple dependencies either enable aws_lc_rs or ring, they cause a clash, so we have to
+    // explicitly tell rustls to use the aws-lc-rs provider
+    _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     // Setup logging
     if std::env::var("RUST_LOG").is_err() {
         #[cfg(debug_assertions)]
