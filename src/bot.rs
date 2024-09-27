@@ -68,7 +68,7 @@ pub async fn setup(
     let manager = SessionManager::new(songbird, database);
 
     #[cfg(feature = "stats")]
-    let stats = StatsManager::new(std::env::var("KV_URL")?)?;
+    let stats = StatsManager::new(spoticord_config::kv_url())?;
 
     tokio::spawn(background_loop(
         manager.clone(),
