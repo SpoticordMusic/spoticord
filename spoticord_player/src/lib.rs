@@ -13,13 +13,16 @@ use librespot::{
         player::{Player as SpotifyPlayer, PlayerEvent as SpotifyPlayerEvent},
     },
 };
-use log::error;
+use log::{error, trace};
 use songbird::{input::RawAdapter, tracks::TrackHandle, Call};
 use spoticord_audio::{
     sink::{SinkEvent, StreamSink},
     stream::Stream,
 };
-use std::{io::Write, sync::Arc};
+use std::{
+    io::Write,
+    sync::{atomic::AtomicBool, Arc},
+};
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 #[derive(Debug)]
@@ -41,6 +44,7 @@ pub enum PlayerEvent {
     Play,
     Stopped,
     TrackChanged(Box<PlaybackInfo>),
+    ConnectionReset,
 }
 
 pub struct Player {
@@ -57,6 +61,9 @@ pub struct Player {
     commands: mpsc::Receiver<PlayerCommand>,
     spotify_events: mpsc::UnboundedReceiver<SpotifyPlayerEvent>,
     sink_events: mpsc::UnboundedReceiver<SinkEvent>,
+
+    /// A shared boolean that reflects whether this Player has shut down
+    shutdown: Arc<AtomicBool>,
 }
 
 impl Player {
@@ -132,6 +139,7 @@ impl Player {
             }
         };
 
+        let shutdown = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel(16);
         let player = Self {
             session,
@@ -141,15 +149,24 @@ impl Player {
 
             playback_info: None,
 
-            events: event_tx,
+            events: event_tx.clone(),
 
             commands: rx,
             spotify_events: rx_player,
             sink_events: rx_sink,
+
+            shutdown: shutdown.clone(),
         };
 
         // Launch it all!
-        tokio::spawn(spirc_task);
+        tokio::spawn(async move {
+            spirc_task.await;
+
+            // If the shutdown flag isn't set, we most likely lost connection to the Spotify AP
+            if !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
+                _ = event_tx.send(PlayerEvent::ConnectionReset).await;
+            }
+        });
         tokio::spawn(player.run());
 
         Ok((PlayerHandle { commands: tx }, event_rx))
@@ -178,6 +195,11 @@ impl Player {
                 else => break,
             }
         }
+
+        self.shutdown
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        trace!("End of Player::run");
     }
 
     async fn handle_command(&mut self, command: PlayerCommand) {
@@ -195,6 +217,8 @@ impl Player {
     }
 
     async fn handle_spotify_event(&mut self, event: SpotifyPlayerEvent) {
+        trace!("Spotify event received: {event:#?}");
+
         match event {
             SpotifyPlayerEvent::PositionCorrection { position_ms, .. }
             | SpotifyPlayerEvent::Seeked { position_ms, .. } => {

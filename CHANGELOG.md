@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.4 | TBD
+
+- Added a message for if the Spotify AP connection drops
+- Added additional timeouts to credential retrieval
+- Removed multiple points of failure in `librespot` that could shut down the bot
+- Fixed an issue where non-premium users could crash the bot for everyone (See point 3)
+
 ## 2.2.3 | September 20th 2024
 
 - Made backend changes to librespot to prevent deadlocking by not waiting for thread shutdowns

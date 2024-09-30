@@ -106,7 +106,7 @@ impl Session {
                 Err(why) => {
                     error!("Failed to retrieve credentials: {why}");
 
-                    return Err(why.into());
+                    return Err(why);
                 }
             };
         let device_name = match session_manager.database().get_user(owner.to_string()).await {
@@ -301,6 +301,22 @@ impl Session {
             PlayerEvent::Pause => self.start_timeout(),
             PlayerEvent::Stopped => self.shutdown_player().await,
             PlayerEvent::TrackChanged(_) => {}
+            PlayerEvent::ConnectionReset => {
+                self.disconnect().await;
+
+                _ = self
+                    .text_channel
+                    .send_message(
+                        &self.context,
+                        CreateMessage::new().embed(
+                            CreateEmbed::new()
+                                .title("Spotify connection lost")
+                                .description("The bot has lost connection to the Spotify AP servers.\nThis is most likely caused by a connection reset on Spotify's end.\n\nUse `/join` to resummon the bot to your voice channel.")
+                                .color(Colors::Error),
+                        ),
+                    )
+                    .await;
+            }
         }
 
         let force_edit = !matches!(event, PlayerEvent::TrackChanged(_));
@@ -490,13 +506,13 @@ impl SessionHandle {
     /// This playback embed will automatically update when certain events happen
     pub async fn create_playback_embed(
         &self,
-        interaction: CommandInteraction,
+        interaction: &CommandInteraction,
         behavior: playback_embed::UpdateBehavior,
     ) -> Result<()> {
         self.commands
             .send(SessionCommand::CreatePlaybackEmbed(
                 self.clone(),
-                interaction,
+                interaction.to_owned(),
                 behavior,
             ))
             .await?;
@@ -600,7 +616,7 @@ async fn retrieve_credentials(database: &Database, owner: impl AsRef<str>) -> Re
         None => {
             let access_token = database.get_access_token(&account.user_id).await?;
             let credentials = spotify::request_session_token(Credentials {
-                username: account.username.clone(),
+                username: Some(account.username.to_string()),
                 auth_type: AuthenticationType::AUTHENTICATION_SPOTIFY_TOKEN,
                 auth_data: access_token.into_bytes(),
             })
@@ -616,7 +632,7 @@ async fn retrieve_credentials(database: &Database, owner: impl AsRef<str>) -> Re
     };
 
     Ok(Credentials {
-        username: account.username,
+        username: Some(account.username),
         auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS,
         auth_data: BASE64.decode(token)?,
     })

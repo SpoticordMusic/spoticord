@@ -31,6 +31,10 @@ pub fn link_url() -> &'static str {
     &env::LINK_URL
 }
 
+pub fn kv_url() -> &'static str {
+    &env::KV_URL
+}
+
 pub fn get_spotify(token: Token) -> AuthCodeSpotify {
     AuthCodeSpotify::from_token_with_config(
         token,

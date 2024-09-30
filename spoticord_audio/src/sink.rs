@@ -24,7 +24,7 @@ impl StreamSink {
 impl Sink for StreamSink {
     fn start(&mut self) -> SinkResult<()> {
         if let Err(_why) = self.sender.send(SinkEvent::Start) {
-            // WARNING: Returning an error causes librespot-playback to exit the process with status 1
+            // WARNING: Returning an error causes librespot-playback to panic
 
             // return Err(SinkError::ConnectionRefused(_why.to_string()));
         }
@@ -34,7 +34,7 @@ impl Sink for StreamSink {
 
     fn stop(&mut self) -> SinkResult<()> {
         if let Err(_why) = self.sender.send(SinkEvent::Stop) {
-            // WARNING: Returning an error causes librespot-playback to exit the process with status 1
+            // WARNING: Returning an error causes librespot-playback to panic
 
             // return Err(SinkError::ConnectionRefused(_why.to_string()));
         }

@@ -1,6 +1,6 @@
 [package]
 name = "spoticord"
-version = "2.2.3"
+version = "2.2.4"
 edition = "2021"
 rust-version = "1.80.0"
 
@@ -39,6 +39,7 @@ poise = "0.6.1"
 serenity = "0.12.2"
 songbird = { version = "0.4.3", features = ["simd-json"] }
 tokio = { version = "1.39.3", features = ["full"] }
+rustls = { version = "0.23.13", features = ["aws-lc-rs"] }
 
 [profile.release]
 opt-level = 3
