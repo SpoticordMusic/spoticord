@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.4 | TBD
+## 2.2.4 | September 30th 2024
 
 - Added a message for if the Spotify AP connection drops
 - Added additional timeouts to credential retrieval
