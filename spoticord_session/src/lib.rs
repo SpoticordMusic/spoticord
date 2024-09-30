@@ -506,13 +506,13 @@ impl SessionHandle {
     /// This playback embed will automatically update when certain events happen
     pub async fn create_playback_embed(
         &self,
-        interaction: CommandInteraction,
+        interaction: &CommandInteraction,
         behavior: playback_embed::UpdateBehavior,
     ) -> Result<()> {
         self.commands
             .send(SessionCommand::CreatePlaybackEmbed(
                 self.clone(),
-                interaction,
+                interaction.to_owned(),
                 behavior,
             ))
             .await?;

@@ -38,10 +38,7 @@ pub async fn playing(
     };
 
     session
-        .create_playback_embed(
-            context.interaction.clone(),
-            update_behavior.unwrap_or_default(),
-        )
+        .create_playback_embed(context.interaction, update_behavior.unwrap_or_default())
         .await?;
 
     Ok(())
