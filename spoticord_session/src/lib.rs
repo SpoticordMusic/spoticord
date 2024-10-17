@@ -1,10 +1,16 @@
+pub mod error;
 pub mod lyrics_embed;
 pub mod manager;
 pub mod playback_embed;
 
-use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use librespot::{discovery::Credentials, protocol::authentication::AuthenticationType};
+use error::Error;
+use error::Result;
+use librespot::{
+    core::connection,
+    discovery::Credentials,
+    protocol::{authentication::AuthenticationType, keyexchange::ErrorCode},
+};
 use log::{debug, error, trace};
 use lyrics_embed::LyricsEmbed;
 use manager::{SessionManager, SessionQuery};
@@ -16,9 +22,8 @@ use serenity::{
     async_trait,
 };
 use songbird::{model::payload::ClientDisconnect, Call, CoreEvent, Event, EventContext};
-use spoticord_database::Database;
 use spoticord_player::{Player, PlayerEvent, PlayerHandle};
-use spoticord_utils::{discord::Colors, spotify};
+use spoticord_utils::discord::Colors;
 use std::{ops::ControlFlow, sync::Arc, time::Duration};
 use tokio::{
     sync::{mpsc, oneshot, Mutex},
@@ -78,6 +83,8 @@ impl Session {
         text_channel_id: ChannelId,
         owner: UserId,
     ) -> Result<SessionHandle> {
+        use Error::*;
+
         // Set up communication channel
         let (tx, rx) = mpsc::channel(16);
         let handle = SessionHandle {
@@ -93,22 +100,19 @@ impl Session {
             .to_channel(&context)
             .await?
             .guild()
-            .ok_or(anyhow!("Text channel is not a guild channel"))?;
+            .ok_or(InvalidChannel)?;
 
         // Create channel for internal command communication (timeouts hint hint)
         // This uses separate channels as to not cause a cyclic dependency
         let (inner_tx, inner_rx) = mpsc::channel(16);
 
         // Grab user credentials and info before joining call
-        let credentials =
-            match retrieve_credentials(&session_manager.database(), owner.to_string()).await {
-                Ok(credentials) => credentials,
-                Err(why) => {
-                    error!("Failed to retrieve credentials: {why}");
+        let account = session_manager
+            .database()
+            .get_account(owner.to_string())
+            .await?;
 
-                    return Err(why);
-                }
-            };
+        // Get user preferences
         let device_name = match session_manager.database().get_user(owner.to_string()).await {
             Ok(user) => user.device_name,
             Err(why) => {
@@ -118,19 +122,35 @@ impl Session {
             }
         };
 
-        // Hello Discord I'm here
-        let call = match session_manager
-            .songbird()
-            .join(guild_id, voice_channel_id)
-            .await
+        let credentials = match account
+            .session_token
+            .and_then(|val| BASE64.decode(&val).ok())
         {
-            Ok(call) => call,
-            Err(why) => {
-                error!("Failed to join voice channel: {why}");
+            Some(token) => Credentials {
+                username: Some(account.username),
+                auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS,
+                auth_data: token,
+            },
+            None => {
+                let access_token = session_manager
+                    .database()
+                    .get_access_token(&account.user_id)
+                    .await?;
 
-                return Err(why.into());
+                Credentials::with_access_token(access_token)
             }
         };
+
+        let credentials_cached = matches!(
+            credentials.auth_type,
+            AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS
+        );
+
+        // Hello Discord I'm here
+        let call = session_manager
+            .songbird()
+            .join(guild_id, voice_channel_id)
+            .await?;
 
         // Make sure call guard is dropped or else we can't execute session.run
         {
@@ -144,17 +164,49 @@ impl Session {
             call.add_global_event(Event::Core(CoreEvent::ClientDisconnect), handle.clone());
         }
 
-        let (player, events) = match Player::create(credentials, call.clone(), device_name).await {
-            Ok(player) => player,
-            Err(why) => {
-                // Leave call on error, otherwise bot will be stuck in call forever until manually disconnected or taken over
-                _ = call.lock().await.leave().await;
+        let (player, events, auth_data) =
+            match Player::create(credentials, call.clone(), device_name).await {
+                Ok(player) => player,
+                Err(why) => {
+                    // Leave call on error, otherwise bot will be stuck in call forever until manually disconnected or taken over
+                    _ = call.lock().await.leave().await;
 
-                error!("Failed to create player: {why}\n{}", why.backtrace());
+                    error!("Failed to create player: {why}");
 
-                return Err(why);
-            }
-        };
+                    if let Some(connection::AuthenticationError::LoginFailed(
+                        ErrorCode::BadCredentials,
+                    )) = why.error.downcast_ref::<connection::AuthenticationError>()
+                    {
+                        // Authentication failed, clear tokens in database (depending on which type of auth failed)
+
+                        if credentials_cached {
+                            session_manager
+                                .database()
+                                .update_session_token(owner.to_string(), None)
+                                .await
+                                .ok();
+                        } else {
+                            session_manager
+                                .database()
+                                .delete_account(owner.to_string())
+                                .await
+                                .ok();
+                        }
+
+                        return Err(AuthenticationFailed);
+                    }
+
+                    return Err(why.into());
+                }
+            };
+
+        // Store reusable credentials in DB
+        // We don't care if this fails, we'll just fall back on token login
+        session_manager
+            .database()
+            .update_session_token(owner.to_string(), Some(BASE64.encode(auth_data)))
+            .await
+            .ok();
 
         let mut session = Self {
             session_manager,
@@ -362,21 +414,88 @@ impl Session {
     }
 
     async fn reactivate(&mut self, new_owner: UserId) -> Result<()> {
+        use Error::*;
+
+        let user_id = &*new_owner.to_string();
+
         if self.active {
-            return Err(anyhow!("Cannot reactivate session that is already active"));
+            return Err(AlreadyActive);
         }
 
-        let credentials =
-            retrieve_credentials(&self.session_manager.database(), new_owner.to_string()).await?;
-        let device_name = self
-            .session_manager
-            .database()
-            .get_user(new_owner.to_string())
-            .await?
-            .device_name;
+        // Grab user credentials and info before joining call
+        let account = self.session_manager.database().get_account(user_id).await?;
 
-        let (player, player_events) =
-            Player::create(credentials, self.call.clone(), device_name).await?;
+        // Get user preferences
+        let device_name = match self.session_manager.database().get_user(user_id).await {
+            Ok(user) => user.device_name,
+            Err(why) => {
+                error!("Failed to get database user: {why}");
+
+                return Err(why.into());
+            }
+        };
+
+        let credentials = match account
+            .session_token
+            .and_then(|val| BASE64.decode(val).ok())
+        {
+            Some(token) => Credentials {
+                username: Some(account.username),
+                auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS,
+                auth_data: token,
+            },
+            None => {
+                let access_token = self
+                    .session_manager
+                    .database()
+                    .get_access_token(&account.user_id)
+                    .await?;
+
+                Credentials::with_access_token(access_token)
+            }
+        };
+
+        let credentials_cached = matches!(
+            credentials.auth_type,
+            AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS
+        );
+
+        let (player, player_events, auth_data) =
+            match Player::create(credentials, self.call.clone(), device_name).await {
+                Ok(player) => player,
+                Err(why) => {
+                    if let Some(connection::AuthenticationError::LoginFailed(
+                        ErrorCode::BadCredentials,
+                    )) = why.error.downcast_ref::<connection::AuthenticationError>()
+                    {
+                        // Authentication failed, clear tokens in database (depending on which type of auth failed)
+
+                        if credentials_cached {
+                            self.session_manager
+                                .database()
+                                .update_session_token(user_id, None)
+                                .await
+                                .ok();
+                        } else {
+                            self.session_manager
+                                .database()
+                                .delete_account(user_id)
+                                .await
+                                .ok();
+                        }
+                    }
+
+                    return Err(why.into());
+                }
+            };
+
+        // Store reusable credentials in DB
+        // We don't care if this fails, we'll just fall back on token login
+        self.session_manager
+            .database()
+            .update_session_token(user_id, Some(BASE64.encode(auth_data)))
+            .await
+            .ok();
 
         self.owner = new_owner;
         self.player = player;
@@ -464,7 +583,7 @@ impl SessionHandle {
     }
 
     /// Retrieve the current owner of the session
-    pub async fn owner(&self) -> Result<UserId> {
+    pub async fn owner(&self) -> anyhow::Result<UserId> {
         let (tx, rx) = oneshot::channel();
         self.commands.send(SessionCommand::GetOwner(tx)).await?;
 
@@ -473,7 +592,7 @@ impl SessionHandle {
     }
 
     /// Retrieve the player handle from the session
-    pub async fn player(&self) -> Result<PlayerHandle> {
+    pub async fn player(&self) -> anyhow::Result<PlayerHandle> {
         let (tx, rx) = oneshot::channel();
         self.commands.send(SessionCommand::GetPlayer(tx)).await?;
 
@@ -481,7 +600,7 @@ impl SessionHandle {
         Ok(result)
     }
 
-    pub async fn active(&self) -> Result<bool> {
+    pub async fn active(&self) -> anyhow::Result<bool> {
         let (tx, rx) = oneshot::channel();
         self.commands.send(SessionCommand::GetActive(tx)).await?;
 
@@ -492,13 +611,15 @@ impl SessionHandle {
     /// Instruct the session to make another user owner.
     ///
     /// This will fail if the session still has an active user assigned to it.
-    pub async fn reactivate(&self, new_owner: UserId) -> Result<()> {
+    pub async fn reactivate(&self, new_owner: UserId) -> anyhow::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.commands
             .send(SessionCommand::Reactivate(new_owner, tx))
             .await?;
 
-        rx.await?
+        rx.await??;
+
+        Ok(())
     }
 
     /// Create a playback embed as a response to an interaction
@@ -508,7 +629,7 @@ impl SessionHandle {
         &self,
         interaction: &CommandInteraction,
         behavior: playback_embed::UpdateBehavior,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         self.commands
             .send(SessionCommand::CreatePlaybackEmbed(
                 self.clone(),
@@ -523,7 +644,7 @@ impl SessionHandle {
     /// Create a lyrics embed as a response to an interaction
     ///
     /// This lyrics embed will automatically retrieve the lyrics and update the embed accordingly
-    pub async fn create_lyrics_embed(&self, interaction: CommandInteraction) -> Result<()> {
+    pub async fn create_lyrics_embed(&self, interaction: CommandInteraction) -> anyhow::Result<()> {
         self.commands
             .send(SessionCommand::CreateLyricsEmbed(self.clone(), interaction))
             .await?;
@@ -589,51 +710,4 @@ impl songbird::EventHandler for SessionHandle {
 
         None
     }
-}
-
-async fn retrieve_credentials(database: &Database, owner: impl AsRef<str>) -> Result<Credentials> {
-    let account = database.get_account(&owner).await?;
-
-    let token = if let Some(session_token) = &account.session_token {
-        match spotify::validate_token(&account.username, session_token).await {
-            Ok(Some(token)) => {
-                database
-                    .update_session_token(&account.user_id, &token)
-                    .await?;
-
-                Some(token)
-            }
-            Ok(None) => Some(session_token.clone()),
-            Err(_) => None,
-        }
-    } else {
-        None
-    };
-
-    // Request new session token if previous one was invalid or missing
-    let token = match token {
-        Some(token) => token,
-        None => {
-            let access_token = database.get_access_token(&account.user_id).await?;
-            let credentials = spotify::request_session_token(Credentials {
-                username: Some(account.username.to_string()),
-                auth_type: AuthenticationType::AUTHENTICATION_SPOTIFY_TOKEN,
-                auth_data: access_token.into_bytes(),
-            })
-            .await?;
-
-            let token = BASE64.encode(credentials.auth_data);
-            database
-                .update_session_token(&account.user_id, &token)
-                .await?;
-
-            token
-        }
-    };
-
-    Ok(Credentials {
-        username: Some(account.username),
-        auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS,
-        auth_data: BASE64.decode(token)?,
-    })
 }

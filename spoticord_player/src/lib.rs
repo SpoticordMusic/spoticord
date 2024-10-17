@@ -4,7 +4,10 @@ use anyhow::Result;
 use info::PlaybackInfo;
 use librespot::{
     connect::{config::ConnectConfig, spirc::Spirc},
-    core::{http_client::HttpClientError, Session as SpotifySession, SessionConfig},
+    core::{
+        connection::AuthenticationError, http_client::HttpClientError, Session as SpotifySession,
+        SessionConfig,
+    },
     discovery::Credentials,
     metadata::Lyrics,
     playback::{
@@ -71,7 +74,7 @@ impl Player {
         credentials: Credentials,
         call: Arc<Mutex<Call>>,
         device_name: impl Into<String>,
-    ) -> Result<(PlayerHandle, mpsc::Receiver<PlayerEvent>)> {
+    ) -> Result<(PlayerHandle, mpsc::Receiver<PlayerEvent>, Vec<u8>), librespot::core::Error> {
         let (event_tx, event_rx) = mpsc::channel(16);
 
         let mut call_lock = call.lock().await;
@@ -80,7 +83,7 @@ impl Player {
         // Create songbird audio track
         let adapter = RawAdapter::new(stream.clone(), 44100, 2);
         let track = call_lock.play_only_input(adapter.into());
-        track.pause()?;
+        _ = track.pause();
 
         // Free call lock before creating session
         drop(call_lock);
@@ -127,17 +130,30 @@ impl Player {
             {
                 Ok(spirc) => break spirc,
                 Err(why) => {
+                    // Instantly return if our credentials have expired
+                    if let Some(AuthenticationError::LoginFailed(
+                        librespot::protocol::keyexchange::ErrorCode::BadCredentials,
+                    )) = why
+                        .error
+                        .downcast_ref::<librespot::core::connection::AuthenticationError>()
+                    {
+                        return Err(why);
+                    }
+
                     tries += 1;
                     if tries > 3 {
                         error!("Failed to connect to Spirc: {why}");
 
-                        return Err(why.into());
+                        return Err(why);
                     }
 
                     continue;
                 }
             }
         };
+
+        // Keep auth data to reuse later for faster reconnections and less authentication requests to Spotify
+        let auth_data = session.auth_data();
 
         let shutdown = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel(16);
@@ -169,7 +185,7 @@ impl Player {
         });
         tokio::spawn(player.run());
 
-        Ok((PlayerHandle { commands: tx }, event_rx))
+        Ok((PlayerHandle { commands: tx }, event_rx, auth_data))
     }
 
     async fn run(mut self) {
