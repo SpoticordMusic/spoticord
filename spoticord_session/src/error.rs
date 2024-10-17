@@ -14,16 +14,16 @@ pub enum Error {
     #[error("Cannot perform this action on an active session")]
     AlreadyActive,
 
-    #[error("{0}")]
+    #[error(transparent)]
     Serenity(#[from] serenity::Error),
 
-    #[error("{0}")]
+    #[error(transparent)]
     Database(#[from] spoticord_database::error::DatabaseError),
 
-    #[error("{0}")]
+    #[error(transparent)]
     JoinError(#[from] songbird::error::JoinError),
 
-    #[error("{0}")]
+    #[error(transparent)]
     Librespot(#[from] librespot::core::Error),
 }
 
