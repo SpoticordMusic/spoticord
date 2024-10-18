@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.5 | TBD
+## 2.2.5 | October 18th 2024
 
 - Updated librespot to rel 0.5.0 (was: 0.5.0-dev)
 - Fixed an issue where Spoticord would lose connection to Spotify servers (fixed by librespot upgrade)
