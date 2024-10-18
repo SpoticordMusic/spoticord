@@ -1,5 +1,4 @@
 pub mod discord;
-pub mod spotify;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

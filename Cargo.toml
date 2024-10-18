@@ -1,6 +1,6 @@
 [package]
 name = "spoticord"
-version = "2.2.4"
+version = "2.2.5"
 edition = "2021"
 rust-version = "1.80.0"
 
@@ -31,6 +31,7 @@ spoticord_session = { path = "./spoticord_session" }
 spoticord_utils = { path = "./spoticord_utils" }
 spoticord_stats = { path = "./spoticord_stats", optional = true }
 
+librespot = { git = "https://github.com/SpoticordMusic/librespot.git", default-features = false }
 anyhow = "1.0.86"
 dotenvy = "0.15.7"
 env_logger = "0.11.5"

@@ -127,14 +127,14 @@ impl Database {
     pub async fn update_session_token(
         &self,
         _user_id: impl AsRef<str>,
-        _session_token: impl AsRef<str>,
+        _session_token: Option<String>,
     ) -> Result<()> {
         use schema::account::dsl::*;
 
         let mut connection = self.0.get().await?;
         diesel::update(account)
             .filter(user_id.eq(_user_id.as_ref()))
-            .set(session_token.eq(_session_token.as_ref()))
+            .set(session_token.eq(_session_token.as_deref()))
             .execute(&mut connection)
             .await?;
 

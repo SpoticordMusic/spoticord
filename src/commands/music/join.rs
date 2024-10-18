@@ -207,14 +207,18 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
     {
         error!("Failed to create session: {why}");
 
+        let description = if matches!(why, spoticord_session::error::Error::AuthenticationFailed) {
+            "Unable to authenticate with Spotify. Did you change your password?\n\nThe broken credentials used have been deleted.\n\nYou might need to relink your account using `/link`."
+        } else {
+            "An error occured whilst trying to create a session. Please try again."
+        };
+
         ctx.send(
             CreateReply::default()
                 .embed(
                     CreateEmbed::new()
                         .title("Failed to create session")
-                        .description(
-                            "An error occured whilst trying to create a session. Please try again.",
-                        )
+                        .description(description)
                         .color(Colors::Error),
                 )
                 .ephemeral(true),

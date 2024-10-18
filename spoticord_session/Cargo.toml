@@ -1,6 +1,6 @@
 [package]
 name = "spoticord_session"
-version = "2.2.4"
+version = "2.2.5"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,10 +12,11 @@ spoticord_player = { path = "../spoticord_player" }
 spoticord_utils = { path = "../spoticord_utils" }
 
 tokio = { version = "1.39.3", features = ["full"] }
-librespot = { git = "https://github.com/SpoticordMusic/librespot.git", version = "0.5.0-dev", default-features = false }
+librespot = { git = "https://github.com/SpoticordMusic/librespot.git", default-features = false }
 serenity = "0.12.2"
 songbird = { version = "0.4.3", features = ["simd-json"] }
 anyhow = "1.0.86"
 log = "0.4.22"
 base64 = "0.22.1"
 poise = "0.6.1"
+thiserror = "1.0.64"

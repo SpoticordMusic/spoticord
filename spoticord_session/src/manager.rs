@@ -1,4 +1,5 @@
-use anyhow::Result;
+use super::{Session, SessionHandle};
+use crate::error::Result;
 use serenity::all::{ChannelId, GuildId, UserId};
 use songbird::Songbird;
 use spoticord_database::Database;
@@ -6,8 +7,6 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-
-use super::{Session, SessionHandle};
 
 #[derive(Clone)]
 pub struct SessionManager {

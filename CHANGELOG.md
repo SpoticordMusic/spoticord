@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.5 | October 18th 2024
+
+- Updated librespot to rel 0.5.0 (was: 0.5.0-dev)
+- Fixed an issue where Spoticord would lose connection to Spotify servers (fixed by librespot upgrade)
+- Reworked authentication logic, hopefully reducing the amount of "suspicious login" forced password resets
+
 ## 2.2.4 | September 30th 2024
 
 - Added a message for if the Spotify AP connection drops
