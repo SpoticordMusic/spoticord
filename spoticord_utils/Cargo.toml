@@ -1,6 +1,6 @@
 [package]
 name = "spoticord_utils"
-version = "2.2.5"
+version.workspace = true
 edition = "2021"
 
 [dependencies]

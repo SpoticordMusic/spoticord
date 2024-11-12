@@ -1,18 +1,18 @@
 [package]
 name = "spoticord_database"
-version = "2.2.5"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
 spoticord_config = { path = "../spoticord_config" }
 
-diesel = { version = "2.2.2", features = ["chrono"] }
-diesel-async = { version = "0.5.0", features = ["deadpool", "postgres"] }
-rspotify = { version = "0.13.2", default-features = false, features = [
+diesel = { version = "2.2.4", features = ["chrono"] }
+diesel-async = { version = "0.5.1", features = ["deadpool", "postgres"] }
+rspotify = { version = "0.13.3", default-features = false, features = [
     "client-reqwest",
     "reqwest-rustls-tls",
 ] }
 chrono = "0.4.38"
-thiserror = "1.0.63"
+thiserror = "2.0.3"
 rand = "0.8.5"
-diesel_async_migrations = "0.13.0"
+diesel_async_migrations = "0.15.0"

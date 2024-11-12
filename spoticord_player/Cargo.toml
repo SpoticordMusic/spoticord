@@ -1,6 +1,6 @@
 [package]
 name = "spoticord_player"
-version = "2.2.5"
+version.workspace = true
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,9 +10,9 @@ spoticord_audio = { path = "../spoticord_audio" }
 spoticord_utils = { path = "../spoticord_utils" }
 
 librespot = { git = "https://github.com/SpoticordMusic/librespot.git", version = "0.5.0-dev", default-features = false }
-songbird = { version = "0.4.3", features = ["simd-json"] }
-tokio = { version = "1.39.3", features = ["full"] }
-anyhow = "1.0.86"
+songbird = { version = "0.4.4", features = ["simd-json"] }
+tokio = { version = "1.41.1", features = ["full"] }
+anyhow = "1.0.93"
 log = "0.4.22"
 symphonia = { version = "0.5.4", default-features = false, features = ["pcm"] }
 hex = "0.4.3"
