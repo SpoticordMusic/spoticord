@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.6 | November 12th 2024
+## 2.2.6 | November 13th 2024
 
 - Updated voice module to support Discord's new mandatory voice encryption
 
