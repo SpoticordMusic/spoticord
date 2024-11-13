@@ -1,10 +1,10 @@
 [package]
 name = "spoticord_config"
-version = "2.2.5"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
-rspotify = { version = "0.13.2", default-features = false, features = [
+rspotify = { version = "0.13.3", default-features = false, features = [
     "client-reqwest",
     "reqwest-rustls-tls",
 ] }

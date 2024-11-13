@@ -1,6 +1,6 @@
 [package]
 name = "spoticord"
-version = "2.2.5"
+version = "2.2.6"
 edition = "2021"
 rust-version = "1.80.0"
 
@@ -32,17 +32,20 @@ spoticord_utils = { path = "./spoticord_utils" }
 spoticord_stats = { path = "./spoticord_stats", optional = true }
 
 librespot = { git = "https://github.com/SpoticordMusic/librespot.git", default-features = false }
-anyhow = "1.0.86"
+anyhow = "1.0.93"
 dotenvy = "0.15.7"
 env_logger = "0.11.5"
 log = "0.4.22"
 poise = "0.6.1"
 serenity = "0.12.2"
-songbird = { version = "0.4.3", features = ["simd-json"] }
-tokio = { version = "1.39.3", features = ["full"] }
-rustls = { version = "0.23.13", features = ["aws-lc-rs"] }
+songbird = { version = "0.4.4", features = ["simd-json"] }
+tokio = { version = "1.41.1", features = ["full"] }
+rustls = { version = "0.23.16", features = ["aws-lc-rs"] }
 
 [profile.release]
 opt-level = 3
 lto = true
 strip = true
+
+[workspace.package]
+version = "2.2.6"

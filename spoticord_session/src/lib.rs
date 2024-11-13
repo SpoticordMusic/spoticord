@@ -113,14 +113,11 @@ impl Session {
             .await?;
 
         // Get user preferences
-        let device_name = match session_manager.database().get_user(owner.to_string()).await {
-            Ok(user) => user.device_name,
-            Err(why) => {
-                error!("Failed to get database user: {why}");
-
-                return Err(why.into());
-            }
-        };
+        let device_name = session_manager
+            .database()
+            .get_user(owner.to_string())
+            .await?
+            .device_name;
 
         let credentials = match account
             .session_token
@@ -426,14 +423,12 @@ impl Session {
         let account = self.session_manager.database().get_account(user_id).await?;
 
         // Get user preferences
-        let device_name = match self.session_manager.database().get_user(user_id).await {
-            Ok(user) => user.device_name,
-            Err(why) => {
-                error!("Failed to get database user: {why}");
-
-                return Err(why.into());
-            }
-        };
+        let device_name = self
+            .session_manager
+            .database()
+            .get_user(user_id)
+            .await?
+            .device_name;
 
         let credentials = match account
             .session_token

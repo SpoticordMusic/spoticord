@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.6 | November 13th 2024
+
+- Updated voice module to support Discord's new mandatory voice encryption
+
 ## 2.2.5 | October 18th 2024
 
 - Updated librespot to rel 0.5.0 (was: 0.5.0-dev)

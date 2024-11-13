@@ -45,7 +45,7 @@ impl Sink for StreamSink {
     }
 
     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
-        use zerocopy::AsBytes;
+        use zerocopy::IntoBytes;
 
         let AudioPacket::Samples(samples) = packet else {
             return Ok(());
