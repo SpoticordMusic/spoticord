@@ -1,51 +1,15 @@
-[package]
-name = "spoticord"
-version = "2.2.6"
-edition = "2021"
-rust-version = "1.80.0"
-
-[[bin]]
-name = "spoticord"
-path = "src/main.rs"
-
 [workspace]
 members = [
-    "spoticord_audio",
-    "spoticord_config",
-    "spoticord_database",
-    "spoticord_player",
-    "spoticord_session",
-    "spoticord_utils",
-    "spoticord_stats",
+    "app/bot",
+    "app/player",
+    "crates/config",
+    "crates/database",
+    "crates/ipc",
+    "crates/spotify",
+    "crates/shared",
 ]
+resolver = "2"
+package.version = "2.3.0"
 
-[features]
-default = ["stats"]
-stats = ["spoticord_stats"]
-
-[dependencies]
-spoticord_config = { path = "./spoticord_config" }
-spoticord_database = { path = "./spoticord_database" }
-spoticord_player = { path = "./spoticord_player" }
-spoticord_session = { path = "./spoticord_session" }
-spoticord_utils = { path = "./spoticord_utils" }
-spoticord_stats = { path = "./spoticord_stats", optional = true }
-
-librespot = { git = "https://github.com/SpoticordMusic/librespot.git", default-features = false }
-anyhow = "1.0.93"
-dotenvy = "0.15.7"
-env_logger = "0.11.5"
-log = "0.4.22"
-poise = "0.6.1"
-serenity = "0.12.2"
-songbird = { version = "0.4.4", features = ["simd-json"] }
-tokio = { version = "1.41.1", features = ["full"] }
-rustls = { version = "0.23.16", features = ["aws-lc-rs"] }
-
-[profile.release]
-opt-level = 3
-lto = true
-strip = true
-
-[workspace.package]
-version = "2.2.6"
+[patch.crates-io]
+audiopus_sys = { git = 'https://github.com/sevenc-nanashi/audiopus_sys', rev = '00e9d16' }

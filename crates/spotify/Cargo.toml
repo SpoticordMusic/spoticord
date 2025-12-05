@@ -1,0 +1,14 @@
+[package]
+name = "spoticord-spotify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+spoticord-database = { path = "../database" }
+
+thiserror = "2.0.17"
+rspotify = { version = "0.15.3", default-features = false, features = [
+    "client-reqwest",
+    "reqwest-rustls-tls",
+] }
+chrono = "0.4.42"

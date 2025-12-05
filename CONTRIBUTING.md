@@ -35,13 +35,3 @@ A member of the team will review your pull request and either merge it, request 
 When writing code we ask you to code in a way that is consistent with the rest of the codebase. This means that you should use the same indentation style, naming conventions, etc. as the rest of the codebase.
 
 We make use of `rustfmt` to format our code. You can install it by running `rustup component add rustfmt` and then running `cargo fmt --all` to format your code. It is generally recommended to run this command before you commit your code. If you use VSCode, you can install the [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=matklad.rust-analyzer) extension and enable the `Format on Save` option.
-
-#### Git Hooks
-
-We make use of the pre-commit git hook to run `clippy` before you commit your code. To set up the git hooks you can run the following command:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-If you want to skip this check, you can use the `--no-verify` flag in your git commit command. Do note however that code that does not pass these checks will not be merged.

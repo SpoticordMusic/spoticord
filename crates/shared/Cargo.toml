@@ -1,0 +1,10 @@
+[package]
+name = "spoticord-shared"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+librespot = { git = "https://github.com/librespot-org/librespot.git", default-features = false, features = [
+    "rustls-tls-native-roots",
+] }
+serde = { version = "1.0.228", features = ["derive"] }

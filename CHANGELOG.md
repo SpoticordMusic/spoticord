@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.3.0 | TBD
+
+- The entire player backend has been rewritten to run in separate processes, making the bot more stable.
+- The bot no longer auto disconnects on paused playback. It now only auto disconnects if the owner has disconnected.
+- Users are no longer limited to one Spoticord session per account. It is now limited to one session per server.
+- Reworked project structure (https://github.com/SpoticordMusic/spoticord)
+- The `/disconnect` command has been renamed to `/leave`.
+- The `/stop` command has been renamed to `/disconnect`.
+- The `/leave` and `/disconnect` command can now also be used by server administrators (requires the "Manage Channel" or "Move Members" permission in the voice channel).
+- Fixed a bug where using the media buttons when the player is not playing would cause an interaction failure
+
 ## 2.2.6 | November 13th 2024
 
 - Updated voice module to support Discord's new mandatory voice encryption

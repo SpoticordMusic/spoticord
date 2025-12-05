@@ -8,7 +8,7 @@
 # as using QEMU to compile takes way too long (multiple hours)
 
 # Builder
-FROM --platform=linux/amd64 rust:1.80.1-slim AS builder
+FROM --platform=linux/amd64 rust:1.91.1-slim AS builder
 
 WORKDIR /app
 
@@ -32,14 +32,16 @@ RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 # Add `--no-default-features` if you don't want stats collection
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-    cargo build --release --target=x86_64-unknown-linux-gnu && \
-    RUSTFLAGS="-L /app/postgresql-${PGVER}/src/interfaces/libpq -C linker=aarch64-linux-gnu-gcc" cargo build --release --target=aarch64-unknown-linux-gnu && \
+    cargo build --release --target=x86_64-unknown-linux-gnu --features=stats && \
+    RUSTFLAGS="-L /app/postgresql-${PGVER}/src/interfaces/libpq -C linker=aarch64-linux-gnu-gcc" cargo build --release --target=aarch64-unknown-linux-gnu --features=stats && \
     # Copy the executables outside of /target as it'll get unmounted after this RUN command
-    cp /app/target/x86_64-unknown-linux-gnu/release/spoticord /app/x86_64 && \
-    cp /app/target/aarch64-unknown-linux-gnu/release/spoticord /app/aarch64
+    cp /app/target/x86_64-unknown-linux-gnu/release/spoticord /app/spoticord_x86_64 && \
+    cp /app/target/x86_64-unknown-linux-gnu/release/spoticord-player /app/spoticord-player_x86_64 && \
+    cp /app/target/aarch64-unknown-linux-gnu/release/spoticord /app/spoticord_aarch64 && \
+    cp /app/target/aarch64-unknown-linux-gnu/release/spoticord-player /app/spoticord-player_aarch64
 
 # Runtime
-FROM debian:bookworm-slim
+FROM debian:unstable-slim
 
 ARG TARGETPLATFORM
 ENV TARGETPLATFORM=${TARGETPLATFORM}
@@ -49,18 +51,24 @@ RUN apt update && apt install -y ca-certificates libpq-dev
 
 # Copy spoticord binaries from builder to /tmp so we can dynamically use them
 COPY --from=builder \
-    /app/x86_64 /tmp/x86_64
+    /app/spoticord_x86_64 /tmp/spoticord_x86_64
 COPY --from=builder \
-    /app/aarch64 /tmp/aarch64
+    /app/spoticord-player_x86_64 /tmp/spoticord-player_x86_64
+COPY --from=builder \
+    /app/spoticord_aarch64 /tmp/spoticord_aarch64
+COPY --from=builder \
+    /app/spoticord-player_aarch64 /tmp/spoticord-player_aarch64
 
 # Copy appropriate binary for target arch from /tmp
 RUN if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then \
-    cp /tmp/x86_64 /usr/local/bin/spoticord; \
+    cp /tmp/spoticord_x86_64        /usr/local/bin/spoticord; \
+    cp /tmp/spoticord-player_x86_64 /usr/local/bin/spoticord-player; \
     elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then \
-    cp /tmp/aarch64 /usr/local/bin/spoticord; \
+    cp /tmp/spoticord_aarch64        /usr/local/bin/spoticord; \
+    cp /tmp/spoticord-player_aarch64 /usr/local/bin/spoticord-player; \
     fi
 
 # Delete unused binaries
-RUN rm -rvf /tmp/x86_64 /tmp/aarch64
+RUN rm -rvf /tmp/spoticord*
 
 ENTRYPOINT [ "/usr/local/bin/spoticord" ]

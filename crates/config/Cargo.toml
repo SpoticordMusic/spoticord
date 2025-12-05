@@ -1,0 +1,7 @@
+[package]
+name = "spoticord-config"
+edition = "2024"
+version.workspace = true
+
+[features]
+stats = []

@@ -1,0 +1,16 @@
+[package]
+name = "spoticord-database"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.42"
+diesel = { version = "2.3.3", features = ["chrono"] }
+diesel-async = { version = "0.7.4", features = [
+    "deadpool",
+    "migrations",
+    "postgres",
+] }
+diesel_migrations = "2.3.0"
+rand = "0.9.2"
+thiserror = "2.0.17"
