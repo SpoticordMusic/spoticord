@@ -448,18 +448,23 @@ fn build_embed(player_info: &PlayerInfo, owner: &User) -> CreateEmbed {
         time_to_string(player_info.track().duration() / 1000)
     );
 
-    CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .author(
             CreateEmbedAuthor::new("Currently Playing")
                 .icon_url("https://spoticord.com/spotify-logo.png"),
         )
         .description(description)
-        .thumbnail(player_info.track().thumbnail())
         .footer(
             CreateEmbedFooter::new(owner.global_name.as_ref().unwrap_or(&owner.name))
                 .icon_url(owner.face()),
         )
-        .color(EmbedColor::Info)
+        .color(EmbedColor::Info);
+
+    if let Some(thumbnail) = player_info.track().thumbnail() {
+        embed = embed.thumbnail(thumbnail);
+    }
+
+    embed
 }
 
 fn build_buttons(id: u64, playing: bool) -> CreateActionRow {

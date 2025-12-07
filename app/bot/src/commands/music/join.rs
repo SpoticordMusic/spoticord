@@ -37,7 +37,7 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
                 .embed(
                     CreateEmbed::new()
                         .title("An error occured")
-                        .description("This server hasn't been discovered by the bot yet (somehow). I blame Serenity, but you can just blame me.")
+                        .description("This server hasn't been discovered by the bot yet (somehow). I blame Serenity, but you can just blame me.\n\nIf you are the server owner (or a high privileged user), you can try to reinvite me, which usually fixes the issue.")
                         .color(EmbedColor::Error),
                 )
                 .ephemeral(true),
@@ -91,7 +91,7 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
                 .embed(
                     CreateEmbed::new()
                         .title("Cannot join voice channel")
-                        .description("I do not have permissions to send messages / links in this text channel.")
+                        .description("I do not have permissions to send messages and/or embed links in *this* text channel.")
                         .color(EmbedColor::Error),
                 )
                 .ephemeral(true),

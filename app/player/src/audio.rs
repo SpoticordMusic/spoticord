@@ -92,23 +92,13 @@ impl MediaSource for Stream {
     }
 }
 
-pub struct StreamSink {
-    stream: Stream,
-}
-
-impl StreamSink {
-    pub fn new(stream: Stream) -> Self {
-        Self { stream }
-    }
-}
-
-impl Sink for StreamSink {
+impl Sink for Stream {
     fn start(&mut self) -> SinkResult<()> {
         Ok(())
     }
 
     fn stop(&mut self) -> SinkResult<()> {
-        self.stream.flush().ok();
+        self.flush().ok();
 
         Ok(())
     }
@@ -126,10 +116,9 @@ impl Sink for StreamSink {
     }
 }
 
-impl SinkAsBytes for StreamSink {
+impl SinkAsBytes for Stream {
     fn write_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
-        self.stream
-            .write_all(data)
+        self.write_all(data)
             .map_err(|why| SinkError::OnWrite(why.to_string()))?;
 
         Ok(())

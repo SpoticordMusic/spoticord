@@ -68,10 +68,9 @@ impl Player {
         device_name: String,
     ) -> Result<(PlayerHandle, Receiver<PlayerEvent>), librespot::core::Error> {
         let stream = crate::audio::Stream::new();
-        let sink = crate::audio::StreamSink::new(stream.clone());
 
         // Create songbird audio track
-        let adapter = RawAdapter::new(stream, 44100, 2);
+        let adapter = RawAdapter::new(stream.clone(), 44100, 2);
         let track = call.play_only_input(adapter.into());
         _ = track.pause();
 
@@ -89,7 +88,7 @@ impl Player {
             },
             session.clone(),
             mixer.get_soft_volume(),
-            move || Box::new(sink),
+            move || Box::new(stream),
         );
         let player_rx = player.get_player_event_channel();
 

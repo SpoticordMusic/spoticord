@@ -36,7 +36,7 @@ pub enum PlayerTrack {
         name: String,
         artists: Vec<Artist>,
         album: String,
-        thumbnail: String,
+        thumbnail: Option<String>,
         duration: u32,
         url: String,
     },
@@ -87,12 +87,7 @@ impl TryFrom<AudioItem> for PlayerTrack {
                         .collect()
                 },
                 album,
-                thumbnail: value
-                    .covers
-                    .first()
-                    .expect("spotify track missing cover image")
-                    .url
-                    .clone(),
+                thumbnail: value.covers.first().map(|cover| cover.url.clone()),
                 duration: value.duration_ms,
                 url: format!("https://open.spotify.com/track/{}", id.to_base62()),
             },
@@ -152,10 +147,10 @@ impl PlayerTrack {
         }
     }
 
-    pub fn thumbnail(&self) -> String {
+    pub fn thumbnail(&self) -> Option<String> {
         match self {
-            Self::Episode { thumbnail, .. } => thumbnail.to_string(),
-            Self::Track { thumbnail, .. } => thumbnail.to_string(),
+            Self::Episode { thumbnail, .. } => Some(thumbnail.to_string()),
+            Self::Track { thumbnail, .. } => thumbnail.as_ref().cloned(),
         }
     }
 

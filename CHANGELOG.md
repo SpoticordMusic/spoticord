@@ -1,15 +1,17 @@
 # Changelog
 
-## 2.3.0 | TBD
+## 2.3.0
 
 - The entire player backend has been rewritten to run in separate processes, making the bot more stable.
 - The bot no longer auto disconnects on paused playback. It now only auto disconnects if the owner has disconnected.
 - Users are no longer limited to one Spoticord session per account. It is now limited to one session per server.
+- Audio quality has been reduced back down to 96 kbps (it was temporarily increased due to a bug).
 - Reworked project structure (https://github.com/SpoticordMusic/spoticord)
 - The `/disconnect` command has been renamed to `/leave`.
 - The `/stop` command has been renamed to `/disconnect`.
 - The `/leave` and `/disconnect` command can now also be used by server administrators (requires the "Manage Channel" or "Move Members" permission in the voice channel).
-- Fixed a bug where using the media buttons when the player is not playing would cause an interaction failure
+- Fixed a bug where using the media buttons when the player is not playing would cause an interaction failure.
+- Fixed a bug where "I've deleted the broken credentials" didn't actually delete your broken credentials.
 
 ## 2.2.6 | November 13th 2024
 
