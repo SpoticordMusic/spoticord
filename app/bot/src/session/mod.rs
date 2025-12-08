@@ -164,7 +164,22 @@ impl Session {
             .await?;
 
         // Wait for ready message
-        match reader.next_response().await {
+        let timeout = if std::env::var("CARGO").is_ok() {
+            120 // If we're developing, cargo might have to compile the player first
+        } else {
+            5
+        };
+
+        let Ok(response) =
+            tokio::time::timeout(Duration::from_secs(timeout), reader.next_response()).await
+        else {
+            return Err(SessionError::Io(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "ipc timed out during initialization",
+            )));
+        };
+
+        match response {
             Some(PlayerMessageResponse::Ready) => {}
             Some(PlayerMessageResponse::Error(message)) => {
                 return Err(SessionError::PlayerError(message));
@@ -192,7 +207,16 @@ impl Session {
             .await?;
 
         // Wait for success response
-        match reader.next_response().await {
+        let Ok(response) =
+            tokio::time::timeout(Duration::from_secs(5), reader.next_response()).await
+        else {
+            return Err(SessionError::Io(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "ipc timed out during initialization",
+            )));
+        };
+
+        match response {
             Some(PlayerMessageResponse::Connected) => {}
             Some(PlayerMessageResponse::Error(message)) => {
                 return Err(SessionError::PlayerError(message));
@@ -304,7 +328,19 @@ impl Session {
             }
             SessionCommand::Disconnect => self.deactivate().await,
             SessionCommand::Reactivate { new_owner, tx } => {
-                _ = tx.send(self.reactivate(new_owner).await)
+                let result = self.reactivate(new_owner).await;
+                let is_fatal = matches!(
+                    &result,
+                    Err(SessionError::Io(_)) | Err(SessionError::PlayerError(_))
+                );
+
+                _ = tx.send(result);
+
+                // Certain errors indicate that the player is no longer considered stable
+                // If this happens, we must end the session immediately
+                if is_fatal {
+                    return false;
+                }
             }
             SessionCommand::Query(query) => self.handle_query(query).await,
             SessionCommand::Player(command) => {
@@ -436,7 +472,16 @@ impl Session {
             })
             .await?;
 
-        match self.player_rx.next_response().await {
+        let Ok(response) =
+            tokio::time::timeout(Duration::from_secs(5), self.player_rx.next_response()).await
+        else {
+            return Err(SessionError::Io(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "ipc timed out during reactivation",
+            )));
+        };
+
+        match response {
             Some(PlayerMessageResponse::Connected) => {}
             Some(PlayerMessageResponse::Error(message)) => {
                 return Err(SessionError::PlayerError(message));

@@ -51,7 +51,10 @@ async fn main() -> anyhow::Result<()> {
 
     debug!("IPC ready, waiting for initialize command...");
 
-    let connect_info = match reader.next().await {
+    let connect_info = match tokio::time::timeout(Duration::from_secs(2), reader.next())
+        .await
+        .expect("IPC timed out") // This operation is crucial, so a timeout would be a critical error, so we panic
+    {
         Some(Ok(BotMessage::Initialize {
             guild_id,
             channel_id,
