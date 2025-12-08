@@ -15,7 +15,7 @@ use librespot::{
     },
 };
 use log::{debug, error};
-use songbird::{Call, input::RawAdapter, tracks::TrackHandle};
+use songbird::{Driver, input::RawAdapter, tracks::TrackHandle};
 use spoticord_shared::player_info::PlayerInfo;
 use tokio::sync::{
     mpsc::{self, Receiver, Sender, UnboundedReceiver},
@@ -63,7 +63,7 @@ pub struct Player {
 
 impl Player {
     pub async fn create(
-        call: &mut Call,
+        driver: &mut Driver,
         credentials: Credentials,
         device_name: String,
     ) -> Result<(PlayerHandle, Receiver<PlayerEvent>), librespot::core::Error> {
@@ -71,7 +71,7 @@ impl Player {
 
         // Create songbird audio track
         let adapter = RawAdapter::new(stream.clone(), 44100, 2);
-        let track = call.play_only_input(adapter.into());
+        let track = driver.play_only_input(adapter.into());
         _ = track.pause();
 
         // Create librespot session

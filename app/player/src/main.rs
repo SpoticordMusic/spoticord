@@ -8,12 +8,12 @@ use anyhow::{Result, bail};
 use librespot::discovery::Credentials;
 use log::{debug, info, warn};
 use songbird::{
-    Call, Config, ConnectionInfo, CoreEvent, Event,
+    Config, ConnectionInfo, CoreEvent, Driver, Event,
     id::{ChannelId, GuildId, UserId},
 };
 use spoticord_ipc::{
     self as ipc, IpcReader, IpcWriter,
-    packet::{BotMessage, PlayerMessage},
+    packet::{BotMessage, PlayerMessage, PlayerMessageEvent, PlayerMessageResponse},
 };
 use tokio::{
     io::{Stdin, Stdout, stdin, stdout},
@@ -88,15 +88,13 @@ async fn main() -> anyhow::Result<()> {
 
     debug!("Connecting to voice server...");
 
-    let mut call = Call::standalone_from_config(
-        connect_info.guild_id,
-        connect_info.user_id,
-        Config::default(),
-    );
+    let mut driver = Driver::new(Config::default());
 
-    if let Err(why) = call.connect(connect_info).await {
+    if let Err(why) = driver.connect(connect_info).await {
         writer
-            .send_message(&PlayerMessage::Error(format!("{why}")))
+            .send_message(&PlayerMessage::Response(PlayerMessageResponse::Error(
+                format!("{why}"),
+            )))
             .await?;
 
         return Err(why.into());
@@ -105,15 +103,19 @@ async fn main() -> anyhow::Result<()> {
     // Set up call events
     let (call_evt, call_evt_rx) = CallEventHandler::create();
 
-    call.add_global_event(Event::Core(CoreEvent::DriverDisconnect), call_evt.clone());
-    call.add_global_event(Event::Core(CoreEvent::ClientDisconnect), call_evt);
+    driver.add_global_event(Event::Core(CoreEvent::DriverDisconnect), call_evt.clone());
+    driver.add_global_event(Event::Core(CoreEvent::DriverConnect), call_evt.clone());
+    driver.add_global_event(Event::Core(CoreEvent::DriverReconnect), call_evt.clone());
+    driver.add_global_event(Event::Core(CoreEvent::ClientDisconnect), call_evt);
 
     // Notify bot that we are ready
-    writer.send_message(&PlayerMessage::Ready).await?;
+    writer
+        .send_message(&PlayerMessage::Response(PlayerMessageResponse::Ready))
+        .await?;
 
     info!("Player fully initialized");
 
-    EventLoop::new(call, call_evt_rx, writer, reader)
+    EventLoop::new(driver, call_evt_rx, writer, reader)
         .run()
         .await?;
 
@@ -124,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 struct EventLoop {
-    call: Call,
+    driver: Driver,
     call_events: Receiver<CallEvent>,
     writer: IpcWriter<Stdout>,
     reader: IpcReader<Stdin, BotMessage>,
@@ -136,13 +138,13 @@ struct EventLoop {
 
 impl EventLoop {
     fn new(
-        call: Call,
+        driver: Driver,
         call_events: Receiver<CallEvent>,
         writer: IpcWriter<Stdout>,
         reader: IpcReader<Stdin, BotMessage>,
     ) -> Self {
         Self {
-            call,
+            driver,
             call_events,
             writer,
             reader,
@@ -210,8 +212,11 @@ impl EventLoop {
             }
         }
 
-        _ = self.call.leave().await;
-        _ = self.writer.send_message(&PlayerMessage::Shutdown).await;
+        _ = self.driver.leave();
+        _ = self
+            .writer
+            .send_message(&PlayerMessage::Event(PlayerMessageEvent::Shutdown))
+            .await;
 
         // Wait for response or channel shutdown, timing out after 3 seconds
         _ = tokio::time::timeout(Duration::from_secs(3), self.reader.next()).await;
@@ -231,7 +236,7 @@ impl EventLoop {
 
                 // Create new player, sending an error back to the bot on failure
                 let (player, player_rx) = match Player::create(
-                    &mut self.call,
+                    &mut self.driver,
                     Credentials::with_access_token(credentials.expose()),
                     device_name,
                 )
@@ -241,7 +246,9 @@ impl EventLoop {
                     Err(why) => {
                         _ = self
                             .writer
-                            .send_message(&PlayerMessage::Error(format!("{why}")))
+                            .send_message(&PlayerMessage::Response(PlayerMessageResponse::Error(
+                                format!("{why}"),
+                            )))
                             .await;
 
                         return true;
@@ -250,7 +257,10 @@ impl EventLoop {
 
                 info!("Player connected to Spotify");
 
-                _ = self.writer.send_message(&PlayerMessage::Connected).await;
+                _ = self
+                    .writer
+                    .send_message(&PlayerMessage::Response(PlayerMessageResponse::Connected))
+                    .await;
 
                 self.player = Some(player);
                 self.player_rx = Some(player_rx);
@@ -331,10 +341,10 @@ impl EventLoop {
             PlayerEvent::TrackChanged(info) => {
                 _ = self
                     .writer
-                    .send_message(&PlayerMessage::Update {
+                    .send_message(&PlayerMessage::Event(PlayerMessageEvent::Update {
                         info,
                         track_changed: true,
-                    })
+                    }))
                     .await;
             }
 
@@ -349,15 +359,18 @@ impl EventLoop {
 
                 _ = self
                     .writer
-                    .send_message(&PlayerMessage::Update {
+                    .send_message(&PlayerMessage::Event(PlayerMessageEvent::Update {
                         info: Box::new(info),
                         track_changed: false,
-                    })
+                    }))
                     .await;
             }
 
             PlayerEvent::Stopped | PlayerEvent::ConnectionReset => {
-                _ = self.writer.send_message(&PlayerMessage::Disconnected).await;
+                _ = self
+                    .writer
+                    .send_message(&PlayerMessage::Event(PlayerMessageEvent::Disconnected))
+                    .await;
             }
         }
     }
@@ -365,7 +378,10 @@ impl EventLoop {
     async fn stop_player(&mut self) {
         self.stop_player_silent().await;
 
-        _ = self.writer.send_message(&PlayerMessage::Disconnected).await;
+        _ = self
+            .writer
+            .send_message(&PlayerMessage::Event(PlayerMessageEvent::Disconnected))
+            .await;
     }
 
     async fn stop_player_silent(&mut self) {

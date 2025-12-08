@@ -1,3 +1,6 @@
+pub mod packet;
+pub mod stdio;
+
 use std::marker::{PhantomData, Unpin};
 use std::pin::Pin;
 
@@ -6,8 +9,6 @@ use serde::de::DeserializeOwned;
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::io::{AsyncRead, Lines};
 use tokio_stream::Stream;
-
-pub mod packet;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IpcError {

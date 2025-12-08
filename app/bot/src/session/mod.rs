@@ -5,9 +5,8 @@ pub mod playback_embed;
 
 use anyhow::Result;
 use log::{debug, error, warn};
-use poise::serenity_prelude::futures::StreamExt;
 use songbird::Call;
-use spoticord_ipc::IpcReader;
+use spoticord_ipc::packet::{PlayerMessageEvent, PlayerMessageResponse};
 use spoticord_shared::player_info::PlayerInfo;
 use std::io;
 use std::time::Duration;
@@ -82,7 +81,7 @@ pub struct Session {
 
     // IPC
     player: IpcWriter<tokio::process::ChildStdin>,
-    player_rx: IpcReader<tokio::process::ChildStdout, PlayerMessage>,
+    player_rx: ipc::stdio::PlayerIpcReader,
 
     // Actor-related
     command_rx: mpsc::Receiver<SessionCommand>,
@@ -135,7 +134,7 @@ impl Session {
         let stdout = player_process.stdout.take().expect("Failed to take stdout");
 
         let mut writer = ipc::writer(stdin);
-        let mut reader = ipc::reader::<_, PlayerMessage>(stdout);
+        let mut reader = ipc::stdio::reader(ipc::reader::<_, PlayerMessage>(stdout));
 
         // Returning early during initialization without explicitly shutting down the player should be fine,
         // as a closed `stdin` will cause the player to error out anyways (so no need to manually kill it).
@@ -165,17 +164,16 @@ impl Session {
             .await?;
 
         // Wait for ready message
-        match reader.next().await {
-            Some(Ok(PlayerMessage::Ready)) => {}
-            Some(Ok(PlayerMessage::Error(message))) => {
+        match reader.next_response().await {
+            Some(PlayerMessageResponse::Ready) => {}
+            Some(PlayerMessageResponse::Error(message)) => {
                 return Err(SessionError::PlayerError(message));
             }
-            Some(Ok(_)) => {
+            Some(_) => {
                 return Err(SessionError::PlayerError(
                     "Unknown response from player during intialization".into(),
                 ));
             }
-            Some(Err(why)) => return Err(SessionError::Ipc(why)),
             None => {
                 return Err(SessionError::Ipc(IpcError::Io(io::Error::new(
                     io::ErrorKind::BrokenPipe,
@@ -194,17 +192,16 @@ impl Session {
             .await?;
 
         // Wait for success response
-        match reader.next().await {
-            Some(Ok(PlayerMessage::Connected)) => {}
-            Some(Ok(PlayerMessage::Error(message))) => {
+        match reader.next_response().await {
+            Some(PlayerMessageResponse::Connected) => {}
+            Some(PlayerMessageResponse::Error(message)) => {
                 return Err(SessionError::PlayerError(message));
             }
-            Some(Ok(_)) => {
+            Some(_) => {
                 return Err(SessionError::PlayerError(
                     "Unknown response from player during intialization".into(),
                 ));
             }
-            Some(Err(why)) => return Err(SessionError::Ipc(why)),
             None => {
                 return Err(SessionError::Ipc(IpcError::Io(io::Error::new(
                     io::ErrorKind::BrokenPipe,
@@ -258,22 +255,14 @@ impl Session {
                 }
 
                 // Handle player messages
-                message = self.player_rx.next() => {
+                message = self.player_rx.next_event() => {
                     let Some(message) = message else {
                         break;
                     };
 
-                    match message {
-                        Ok(message) => {
-                            if !self.handle_player_message(message).await {
+                    if !self.handle_player_message(message).await {
                                 break;
                             }
-                        }
-                        Err(why) => {
-                            error!("Failed to parse player message: {why}");
-                            break;
-                        }
-                    };
                 }
 
                 _ = async {
@@ -356,32 +345,28 @@ impl Session {
         true
     }
 
-    async fn handle_player_message(&mut self, message: PlayerMessage) -> bool {
+    async fn handle_player_message(&mut self, message: PlayerMessageEvent) -> bool {
         let is_track_update = !matches!(
             message,
-            PlayerMessage::Update {
+            PlayerMessageEvent::Update {
                 track_changed: true,
                 ..
             }
         );
 
         match message {
-            PlayerMessage::Shutdown => {
+            PlayerMessageEvent::Shutdown => {
                 // The player is shutting down, so we need to as well.
                 self.command_rx.close();
                 return false;
             }
-            PlayerMessage::Disconnected => self.deactivate().await,
-            PlayerMessage::Error(message) => {
+            PlayerMessageEvent::Disconnected => self.deactivate().await,
+            PlayerMessageEvent::Error(message) => {
                 warn!("Received unexpected player error: {message}");
             }
 
-            PlayerMessage::Update { info, .. } => {
+            PlayerMessageEvent::Update { info, .. } => {
                 self.player_info = Some(*info);
-            }
-
-            PlayerMessage::Connected | PlayerMessage::Ready => {
-                warn!("Unexpected connected or ready event received from player");
             }
         }
 
@@ -451,17 +436,16 @@ impl Session {
             })
             .await?;
 
-        match self.player_rx.next().await {
-            Some(Ok(PlayerMessage::Connected)) => {}
-            Some(Ok(PlayerMessage::Error(message))) => {
+        match self.player_rx.next_response().await {
+            Some(PlayerMessageResponse::Connected) => {}
+            Some(PlayerMessageResponse::Error(message)) => {
                 return Err(SessionError::PlayerError(message));
             }
-            Some(Ok(_)) => {
+            Some(_) => {
                 return Err(SessionError::PlayerError(
                     "Unknown response from player during intialization".into(),
                 ));
             }
-            Some(Err(why)) => return Err(SessionError::Ipc(why)),
             None => {
                 return Err(SessionError::Ipc(IpcError::Io(io::Error::new(
                     io::ErrorKind::BrokenPipe,

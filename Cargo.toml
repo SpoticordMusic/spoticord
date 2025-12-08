@@ -13,9 +13,3 @@ package.version = "2.3.0"
 
 [patch.crates-io]
 audiopus_sys = { git = 'https://github.com/sevenc-nanashi/audiopus_sys', rev = '00e9d16' }
-
-[profile.release]
-panic = "abort"
-
-[profile.dev]
-panic = "abort"

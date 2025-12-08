@@ -33,10 +33,22 @@ impl EventHandler for CallEventHandler {
 
         match ctx {
             EventContext::DriverDisconnect(_) => {
+                log::debug!("Driver disconnect event called");
+
                 _ = self.tx.send(CallEvent::DriverDisconnect).await;
             }
 
+            EventContext::DriverConnect(_) => {
+                log::debug!("Driver connect event called");
+            }
+
+            EventContext::DriverReconnect(_) => {
+                log::debug!("Driver reconnect event called");
+            }
+
             EventContext::ClientDisconnect(ClientDisconnect { user_id }) => {
+                log::debug!("Client disconnect event called");
+
                 _ = self.tx.send(CallEvent::ClientDisconnect(*user_id)).await;
             }
 

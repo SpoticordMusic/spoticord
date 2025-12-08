@@ -42,17 +42,36 @@ pub enum BotMessage {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "t", content = "d")]
 pub enum PlayerMessage {
+    Response(PlayerMessageResponse),
+    Event(PlayerMessageEvent),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "t", content = "d")]
+pub enum PlayerMessageResponse {
     /// Reports that the player is ready and waiting for a user.
     Ready,
+
     /// Reports that the player has successfully connected to Spotify.
     Connected,
+
+    /// Reports that an error occured on the last command
+    Error(String),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "t", content = "d")]
+pub enum PlayerMessageEvent {
     /// Reports that the player has been disconnected from Spotify.
     Disconnected,
+
     /// Reports that the player is shutting down.
     Shutdown,
-    /// Reports an error.
+
+    /// Reports an unexpected error.
     Error(String),
-    /// Reports the full player info.
+
+    /// Reports full playback information.
     Update {
         info: Box<PlayerInfo>,
         track_changed: bool,
