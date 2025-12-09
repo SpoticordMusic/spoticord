@@ -273,8 +273,18 @@ impl Session {
                         break;
                     };
 
-                    if !self.handle_command(command).await {
-                        break;
+                    let dbg = format!("{command:#?}");
+                    let timeout = tokio::time::timeout(Duration::from_secs(30), self.handle_command(command)).await;
+
+                    match timeout {
+                        Ok(false) => break,
+                        Ok(_) => {}
+                        Err(_) => {
+                            error!("handle_command timed out after 30s");
+                            error!("{dbg}");
+
+                            break;
+                        }
                     }
                 }
 
@@ -284,9 +294,19 @@ impl Session {
                         break;
                     };
 
-                    if !self.handle_player_message(message).await {
-                                break;
-                            }
+                    let dbg = format!("{message:#?}");
+                    let timeout = tokio::time::timeout(Duration::from_secs(30), self.handle_player_message(message)).await;
+
+                    match timeout {
+                        Ok(false) => break,
+                        Ok(_) => {}
+                        Err(_) => {
+                            error!("handle_player_message timed out after 30s");
+                            error!("{dbg}");
+
+                            break;
+                        }
+                    }
                 }
 
                 _ = async {

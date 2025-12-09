@@ -3,6 +3,7 @@ pub mod stdio;
 
 use std::marker::{PhantomData, Unpin};
 use std::pin::Pin;
+use std::time::Duration;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -16,6 +17,8 @@ pub enum IpcError {
     Io(#[from] io::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("operation timed out")]
+    Timeout,
 }
 
 pub struct IpcWriter<W> {
@@ -38,7 +41,21 @@ where
     pub async fn send_message<M: Serialize>(&mut self, message: &M) -> Result<(), IpcError> {
         let mut json = serde_json::to_string(message)?;
         json.push('\n');
-        self.writer.write_all(json.as_bytes()).await?;
+
+        match tokio::time::timeout(
+            Duration::from_secs(5),
+            self.writer.write_all(json.as_bytes()),
+        )
+        .await
+        {
+            Ok(result) => result?,
+            Err(_) => {
+                log::error!("ipc write operation timed out");
+
+                return Err(IpcError::Timeout);
+            }
+        };
+
         Ok(())
     }
 }

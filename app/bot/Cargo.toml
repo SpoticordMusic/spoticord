@@ -5,6 +5,7 @@ edition = "2024"
 
 [features]
 stats = ["spoticord-config/stats", "redis"]
+# http = ["axum"]
 
 [dependencies]
 spoticord-config = { path = "../../crates/config" }
@@ -16,11 +17,15 @@ spoticord-shared = { path = "../../crates/shared" }
 anyhow = "1.0.100"
 dotenvy = "0.15.7"
 env_logger = "0.11.8"
-log = "0.4.28"
+log = "0.4.29"
 poise = "0.6.1"
 rustls = { version = "0.23.35", features = ["aws-lc-rs"] }
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["full"] }
 songbird = "0.5.0"
 librespot = { git = "https://github.com/librespot-org/librespot.git", default-features = false }
+
+# Stats feature
 redis = { version = "1.0.0", default-features = false, optional = true }
+
+# HTTP feature
