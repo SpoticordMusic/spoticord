@@ -400,8 +400,7 @@ dependencies = [
 [[package]]
 name = "cmake"
 version = "0.1.54"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7caa3f9de89ddbe2c607f4101924c5abec803763ae9534e4f4d7d8f84aa81f0"
+source = "git+https://github.com/rust-lang/cmake-rs?rev=6e68d9c#6e68d9ceeffd5a006a5ac21ee8bf045bd2e15316"
 dependencies = [
  "cc",
 ]

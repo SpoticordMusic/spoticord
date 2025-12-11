@@ -90,11 +90,18 @@ impl PlaybackEmbed {
         interaction
             .create_response(
                 &ctx,
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
-                        .embed(build_embed(player_info, &owner))
-                        .components(vec![build_buttons(ctx_id, player_info.playing())]),
-                ),
+                CreateInteractionResponse::Message({
+                    let mut message = CreateInteractionResponseMessage::new()
+                        .embed(build_embed(player_info, &owner));
+
+                    // Hide buttons if this is a static embed
+                    if !update_behavior.is_static() {
+                        message =
+                            message.components(vec![build_buttons(ctx_id, player_info.playing())]);
+                    }
+
+                    message
+                }),
             )
             .await?;
 
@@ -140,8 +147,18 @@ impl PlaybackEmbed {
                         break;
                     };
 
-                    if !self.handle_command(command).await {
-                        break;
+                    let dbg = format!("{command:#?}");
+                    let timeout = tokio::time::timeout(Duration::from_secs(30), self.handle_command(command)).await;
+
+                    match timeout {
+                        Ok(false) => break,
+                        Ok(_) => {}
+                        Err(_) => {
+                            error!("handle_command timed out after 30s");
+                            error!("{dbg}");
+
+                            break;
+                        }
                     }
                 }
 
@@ -150,7 +167,12 @@ impl PlaybackEmbed {
                         break;
                     };
 
-                    self.handle_press(press).await;
+                    let dbg = format!("{press:#?}");
+
+                    if tokio::time::timeout(Duration::from_secs(30), self.handle_press(press)).await.is_err() {
+                        error!("handle_press timed out after 30s");
+                        error!("{dbg}");
+                    }
                 }
 
                 _ = async {
@@ -159,8 +181,17 @@ impl PlaybackEmbed {
                         tokio::time::sleep(update_in).await;
                     }
                 }, if self.update_in.is_some() => {
-                    if !self.update_embed(self.force_edit).await {
-                        break;
+                    let timeout = tokio::time::timeout(Duration::from_secs(30), self.update_embed(self.force_edit)).await;
+
+                    match timeout {
+                        Ok(false) => break,
+                        Ok(_) => {}
+                        Err(_) => {
+                            error!("timeout_edit timed out after 30s");
+                            error!("{}", self.force_edit);
+
+                            break;
+                        }
                     }
                 }
             }
