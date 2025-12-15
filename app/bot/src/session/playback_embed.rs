@@ -148,13 +148,13 @@ impl PlaybackEmbed {
                     };
 
                     let dbg = format!("{command:#?}");
-                    let timeout = tokio::time::timeout(Duration::from_secs(30), self.handle_command(command)).await;
+                    let timeout = tokio::time::timeout(Duration::from_secs(10), self.handle_command(command)).await;
 
                     match timeout {
                         Ok(false) => break,
                         Ok(_) => {}
                         Err(_) => {
-                            error!("handle_command timed out after 30s");
+                            error!("handle_command timed out after 10s");
                             error!("{dbg}");
 
                             break;
@@ -169,8 +169,8 @@ impl PlaybackEmbed {
 
                     let dbg = format!("{press:#?}");
 
-                    if tokio::time::timeout(Duration::from_secs(30), self.handle_press(press)).await.is_err() {
-                        error!("handle_press timed out after 30s");
+                    if tokio::time::timeout(Duration::from_secs(10), self.handle_press(press)).await.is_err() {
+                        error!("handle_press timed out after 10s");
                         error!("{dbg}");
                     }
                 }
@@ -181,13 +181,13 @@ impl PlaybackEmbed {
                         tokio::time::sleep(update_in).await;
                     }
                 }, if self.update_in.is_some() => {
-                    let timeout = tokio::time::timeout(Duration::from_secs(30), self.update_embed(self.force_edit)).await;
+                    let timeout = tokio::time::timeout(Duration::from_secs(10), self.update_embed(self.force_edit)).await;
 
                     match timeout {
                         Ok(false) => break,
                         Ok(_) => {}
                         Err(_) => {
-                            error!("timeout_edit timed out after 30s");
+                            error!("timeout_edit timed out after 10s");
                             error!("{}", self.force_edit);
 
                             break;
@@ -302,17 +302,25 @@ impl PlaybackEmbed {
     async fn update_embed(&mut self, force_edit: bool) -> bool {
         self.update_in = None;
 
+        log::debug!("PlaybackEmbed::update_embed before get_owner_id");
+
         let Ok(owner) = self.session.get_owner_id().await else {
             _ = self.update_not_playing().await;
 
             return false;
         };
 
+        log::debug!("PlaybackEmbed::update_embed before get_player_info");
+
         let Ok(Some(player_info)) = self.session.get_player_info().await else {
             _ = self.update_not_playing().await;
 
             return false;
         };
+
+        log::debug!(
+            "PlaybackEmbed::update_embed after get_owner_id (assuming rest of code cannot hang)"
+        );
 
         let owner = match owner.to_user(&self.ctx).await {
             Ok(owner) => owner,
@@ -393,6 +401,8 @@ pub struct PlaybackEmbedHandle {
 impl PlaybackEmbedHandle {
     pub async fn invoke_update(&self, force_edit: bool) -> Result<()> {
         self.tx.send(Command::InvokeUpdate(force_edit)).await?;
+
+        log::debug!("PlaybackEmbedHandle capacity: {}", self.tx.capacity());
 
         Ok(())
     }

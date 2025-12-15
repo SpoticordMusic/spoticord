@@ -167,7 +167,7 @@ impl Session {
         let timeout = if std::env::var("CARGO").is_ok() {
             120 // If we're developing, cargo might have to compile the player first
         } else {
-            10
+            30
         };
 
         let Ok(response) =
@@ -208,7 +208,7 @@ impl Session {
 
         // Wait for success response
         let Ok(response) =
-            tokio::time::timeout(Duration::from_secs(10), reader.next_response()).await
+            tokio::time::timeout(Duration::from_secs(30), reader.next_response()).await
         else {
             return Err(SessionError::Io(io::Error::new(
                 io::ErrorKind::TimedOut,

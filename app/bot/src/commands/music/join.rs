@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{io, time::Duration};
 
 use anyhow::Result;
 use log::error;
@@ -195,13 +195,14 @@ pub async fn join(ctx: Context<'_>) -> Result<()> {
     {
         error!("Failed to create session: {why}");
 
-        let description = if matches!(
-            why,
-            SessionError::Spotify(spoticord_spotify::Error::RefreshTokenFailure)
-        ) {
-            "Unable to authenticate with Spotify. Did you change your password?\n\nThe broken credentials used have been deleted.\n\nYou might need to relink your account using `/link`."
-        } else {
-            "An error occured whilst trying to create a session. Please try again."
+        let description = match why {
+            SessionError::Spotify(spoticord_spotify::Error::RefreshTokenFailure) => {
+                "Unable to authenticate with Spotify. Did you change your password?\n\nThe broken credentials used have been deleted.\n\nYou might need to relink your account using `/link`."
+            }
+            SessionError::Io(error) if error.kind() == io::ErrorKind::TimedOut => {
+                "Session startup took longer than the allowed 30 seconds. The bot may be experiencing networking issues connecting to Discord or Spotify. Please try again."
+            }
+            _ => "An error occured whilst trying to create a session. Please try again.",
         };
 
         ctx.send(
