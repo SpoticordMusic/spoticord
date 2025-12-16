@@ -9,6 +9,7 @@ use librespot::discovery::Credentials;
 use log::{debug, info, warn};
 use songbird::{
     Config, ConnectionInfo, CoreEvent, Driver, Event,
+    driver::retry::{Retry, Strategy},
     id::{ChannelId, GuildId, UserId},
 };
 use spoticord_ipc::{
@@ -91,7 +92,14 @@ async fn main() -> anyhow::Result<()> {
 
     debug!("Connecting to voice server...");
 
-    let mut driver = Driver::new(Config::default());
+    let mut driver = Driver::new(
+        Config::default()
+            .driver_timeout(Some(Duration::from_secs(5)))
+            .driver_retry(Retry {
+                retry_limit: Some(10),
+                strategy: Strategy::Every(Duration::from_secs(1)),
+            }),
+    );
 
     if let Err(why) = driver.connect(connect_info).await {
         writer
